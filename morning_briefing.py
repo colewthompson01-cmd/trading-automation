@@ -429,7 +429,7 @@ def format_briefing_html(macro, movers, drivers, news, earnings, screener_output
 
   <!-- BB SCREENER -->
   <div style="padding:16px 28px 8px;">
-    {_sec("BB Screener — Today\'s Setups")}
+    {_sec("BB Screener — Today's Setups")}
     <div style="font-size:13px;margin-bottom:10px;">{screener_summary}</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <tr style="background:#DCE6F1;">
