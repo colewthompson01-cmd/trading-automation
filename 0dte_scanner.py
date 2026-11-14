@@ -670,8 +670,12 @@ def format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
                     f'★ <strong>Recommended Entry:</strong> '
                     f'${best["strike"]:.0f} {direction} @ limit '
                     f'<strong>${mid:.2f}</strong> (~${cost:.0f} per contract)</div>')
-        stop_price = round(mid * 0.50, 2)
-        stop_cost  = round(stop_price * 100, 2)
+        stop_price  = round(mid * 0.50, 2)
+        stop_cost   = round(stop_price * 100, 2)
+        target_50   = round(mid * 1.50, 2)
+        target_100  = round(mid * 2.00, 2)
+        gain_50     = round(mid * 0.50 * 100, 2)
+        gain_100    = round(mid * 1.00 * 100, 2)
         quick_entry_html = f"""
   <div style="margin:0;padding:16px 28px 20px;background:#fffbe6;border-top:3px solid #e6a800;">
     <div style="font-size:13px;font-weight:bold;color:#7a5500;text-transform:uppercase;
@@ -699,11 +703,33 @@ def format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
           <td style="padding:6px 10px;font-weight:bold;">${mid:.2f} &nbsp;<span style="color:#888;font-weight:normal;">(mid of ${best.get("bid",0):.2f} / ${best.get("ask",0):.2f})</span></td></tr>
       <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Cost / Contract</td>
           <td style="padding:6px 10px;font-weight:bold;">~${cost:.0f}</td></tr>
-      <tr><td style="padding:6px 10px;color:#555;">Suggested Stop</td>
-          <td style="padding:6px 10px;font-weight:bold;">${stop_price:.2f} &nbsp;<span style="color:#888;font-weight:normal;">(50% of premium, ~${stop_cost:.0f} loss/contract)</span></td></tr>
       <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Time in Force</td>
           <td style="padding:6px 10px;font-weight:bold;">Day</td></tr>
     </table>
+    <div style="margin-top:14px;border-top:1px dashed #e6a800;padding-top:12px;">
+      <div style="font-size:11px;font-weight:bold;color:#7a5500;text-transform:uppercase;
+        letter-spacing:1px;margin-bottom:8px;">&#x1F504; OCO Bracket (place immediately after fill)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr style="background:#fff3cc;">
+          <td style="padding:5px 10px;font-weight:bold;color:#555;width:40%;">Order</td>
+          <td style="padding:5px 10px;font-weight:bold;color:#555;">Price</td>
+          <td style="padding:5px 10px;font-weight:bold;color:#555;">P&amp;L / Contract</td>
+        </tr>
+        <tr><td style="padding:6px 10px;color:#276221;font-weight:bold;">&#x1F3AF; Sell Limit (+100%)</td>
+            <td style="padding:6px 10px;font-weight:bold;">${target_100:.2f}</td>
+            <td style="padding:6px 10px;color:#276221;">+${gain_100:.0f}</td></tr>
+        <tr style="background:#fff8e6;">
+            <td style="padding:6px 10px;color:#276221;">&#x1F3AF; Sell Limit (+50%)</td>
+            <td style="padding:6px 10px;font-weight:bold;">${target_50:.2f}</td>
+            <td style="padding:6px 10px;color:#276221;">+${gain_50:.0f}</td></tr>
+        <tr><td style="padding:6px 10px;color:#9C0006;font-weight:bold;">&#x1F6D1; Stop Market (-50%)</td>
+            <td style="padding:6px 10px;font-weight:bold;">${stop_price:.2f} trigger</td>
+            <td style="padding:6px 10px;color:#9C0006;">-${stop_cost:.0f}</td></tr>
+      </table>
+      <div style="margin-top:8px;font-size:11px;color:#888;font-style:italic;">
+        Use Stop Market (not Stop Limit) for the loss side — 0DTE options can gap through a limit without filling.
+      </div>
+    </div>
   </div>"""
     else:
         quick_entry_html = ""
@@ -918,25 +944,41 @@ def format_multi_html(results, market_tech, cross, sectors):
             cost      = round(mid * 100, 2)
             stop_p    = round(mid * 0.50, 2)
             stop_loss = round(stop_p * 100, 2)
+            tgt_50    = round(mid * 1.50, 2)
+            tgt_100   = round(mid * 2.00, 2)
+            gain_50   = round(mid * 0.50 * 100, 2)
+            gain_100  = round(mid * 1.00 * 100, 2)
             atp_block = f"""
     <div style="background:#fffbe6;padding:10px 14px;border-top:2px solid #e6a800;">
       <div style="font-size:11px;font-weight:bold;color:#7a5500;text-transform:uppercase;
-        letter-spacing:1px;margin-bottom:8px;">&#x1F4CB; ATP Quick Entry</div>
+        letter-spacing:1px;margin-bottom:8px;">&#x1F4CB; ATP Entry &amp; OCO Bracket</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <tr>
-          <td style="padding:3px 6px;color:#555;width:35%;">Strike / Type</td>
+          <td style="padding:3px 6px;color:#555;width:38%;">Strike / Type</td>
           <td style="padding:3px 6px;font-weight:bold;">${best["strike"]:.0f} {direction} &nbsp;
             <span style="color:#888;font-weight:normal;">{exp_date} (0DTE)</span></td>
         </tr>
         <tr style="background:#fff8e6;">
-          <td style="padding:3px 6px;color:#555;">Limit Price</td>
+          <td style="padding:3px 6px;color:#555;">Buy Limit</td>
           <td style="padding:3px 6px;font-weight:bold;">${mid:.2f}
             <span style="color:#888;font-weight:normal;">(~${cost:.0f}/contract)</span></td>
         </tr>
-        <tr>
-          <td style="padding:3px 6px;color:#555;">Stop</td>
-          <td style="padding:3px 6px;font-weight:bold;">${stop_p:.2f}
-            <span style="color:#888;font-weight:normal;">(-50%, ~${stop_loss:.0f} loss/contract)</span></td>
+        <tr><td colspan="2" style="padding:4px 6px;font-size:11px;color:#b35900;
+          font-style:italic;">&#x1F504; After fill, place OCO:</td></tr>
+        <tr style="background:#f0fff0;">
+          <td style="padding:3px 6px;color:#276221;font-weight:bold;">&#x1F3AF; Sell Limit +100%</td>
+          <td style="padding:3px 6px;font-weight:bold;color:#276221;">${tgt_100:.2f}
+            <span style="color:#888;font-weight:normal;font-weight:normal;">(+${gain_100:.0f}/contract)</span></td>
+        </tr>
+        <tr style="background:#f8fff8;">
+          <td style="padding:3px 6px;color:#276221;">&#x1F3AF; Sell Limit +50%</td>
+          <td style="padding:3px 6px;font-weight:bold;color:#276221;">${tgt_50:.2f}
+            <span style="color:#888;font-weight:normal;">(+${gain_50:.0f}/contract)</span></td>
+        </tr>
+        <tr style="background:#fff5f5;">
+          <td style="padding:3px 6px;color:#9C0006;font-weight:bold;">&#x1F6D1; Stop Market -50%</td>
+          <td style="padding:3px 6px;font-weight:bold;color:#9C0006;">${stop_p:.2f} trigger
+            <span style="color:#888;font-weight:normal;">(-${stop_loss:.0f}/contract)</span></td>
         </tr>
       </table>
     </div>"""
