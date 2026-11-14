@@ -95,10 +95,12 @@ def download_all(years=YEARS_BACK):
     start_str = start.strftime("%Y-%m-%d")
     end_str   = end.strftime("%Y-%m-%d")
 
+    # Add ^VIX3M for VIX term structure signal; SMH for semi relative-strength
+    extra_syms = ["^VIX3M", "SMH"]
     all_syms = (SCAN_TICKERS +
                 list(SECTORS.values()) +
                 list(CROSS_TICKERS.values()) +
-                ["^VIX", "ES=F"])
+                ["^VIX", "ES=F"] + extra_syms)
 
     print(f"Downloading {len(all_syms)} symbols from {start_str} to {end_str}...")
     raw = yf.download(all_syms, start=start_str, end=end_str,
@@ -108,14 +110,19 @@ def download_all(years=YEARS_BACK):
     if isinstance(raw.columns, pd.MultiIndex):
         close  = raw["Close"]
         open_  = raw["Open"]
+        high_  = raw["High"]
+        low_   = raw["Low"]
     else:
         close  = raw[["Close"]].rename(columns={"Close": all_syms[0]})
         open_  = raw[["Open"]].rename(columns={"Open": all_syms[0]})
+        high_  = raw[["High"]].rename(columns={"High": all_syms[0]})
+        low_   = raw[["Low"]].rename(columns={"Low": all_syms[0]})
 
-    return close, open_
+    return close, open_, high_, low_
 
 # ── BUILD SIGNAL DICT FOR ONE DAY ────────────────────────────────────────
-def build_day_signals(ticker, day_idx, close, open_, rsi_df, pctb_df):
+def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_df,
+                      atr_df, ma20_df, ma50_df):
     """
     Construct the tech/cross/sectors dicts for one historical trading day.
     Uses prior-day data only (no lookahead) — simulates what you'd know
@@ -156,13 +163,65 @@ def build_day_signals(ticker, day_idx, close, open_, rsi_df, pctb_df):
     except Exception:
         futures_pct = tk_premkt  # fall back to ticker's own gap
 
+    # ── Gap ATR ───────────────────────────────────────────────────────────
+    gap_atr = None
+    try:
+        atr_val = float(atr_df[ticker].iloc[prev_idx])
+        if atr_val > 0:
+            gap_atr = round((tk_open_today - tk_close_prev) / atr_val, 2)
+    except Exception:
+        pass
+
+    # ── Trend regime (20/50 MA) ───────────────────────────────────────────
+    trend_regime = None
+    try:
+        s20 = float(ma20_df[ticker].iloc[prev_idx])
+        s50 = float(ma50_df[ticker].iloc[prev_idx])
+        pc  = float(tk_close_prev)
+        if pc > s20 and s20 > s50:
+            trend_regime = 1
+        elif pc < s20 and s20 < s50:
+            trend_regime = -1
+        else:
+            trend_regime = 0
+    except Exception:
+        pass
+
+    # ── Relative strength vs sector ETF (5-day) ──────────────────────────
+    rel_strength = None
+    try:
+        etf_map = {"NVDA": "SMH", "AMD": "SMH", "MU": "SMH",
+                   "TSLA": "XLY", "META": "XLC", "AMZN": "XLC",
+                   "NFLX": "XLC", "MSTR": "XLF", "HOOD": "XLF"}
+        etf_sym = etf_map.get(ticker)
+        if etf_sym and etf_sym in close.columns and prev_idx >= 5:
+            etf_rs = float(close[etf_sym].iloc[prev_idx]) / float(close[etf_sym].iloc[prev_idx - 5]) - 1
+            tk_rs  = float(close[ticker].iloc[prev_idx])  / float(close[ticker].iloc[prev_idx - 5])  - 1
+            rel_strength = round((tk_rs - etf_rs) * 100, 2)
+    except Exception:
+        pass
+
+    # ── VIX term structure (VIX / VIX3M) ─────────────────────────────────
+    vix_ts = None
+    try:
+        if "^VIX3M" in close.columns:
+            vix3m = float(close["^VIX3M"].iloc[prev_idx])
+            if vix3m > 0:
+                vix_ts = round(vix / vix3m, 3)
+    except Exception:
+        pass
+
     tech = {
-        "tk_premkt":   tk_premkt,
-        "tk_rsi":      tk_rsi,
-        "tk_pctb":     tk_pctb,
-        "vix":         vix,
-        "vix_chg":     vix_chg,
-        "futures_pct": futures_pct,
+        "tk_premkt":    tk_premkt,
+        "tk_rsi":       tk_rsi,
+        "tk_pctb":      tk_pctb,
+        "vix":          vix,
+        "vix_chg":      vix_chg,
+        "futures_pct":  futures_pct,
+        "gap_atr":      gap_atr,
+        "trend_regime": trend_regime,
+        "rel_strength": rel_strength,
+        "vix_ts":       vix_ts,
     }
 
     # ── Cross-asset ───────────────────────────────────────────────────────
@@ -191,13 +250,26 @@ def build_day_signals(ticker, day_idx, close, open_, rsi_df, pctb_df):
     return tech, cross, sectors
 
 # ── RUN BACKTEST ──────────────────────────────────────────────────────────
-def run_backtest(tickers, close, open_, years=YEARS_BACK):
+def run_backtest(tickers, close, open_, high_, low_, years=YEARS_BACK):
     cutoff = date.today() - timedelta(days=int(years * 365))
 
-    # Pre-compute RSI and BB%B for all tickers
-    print("Computing RSI and BB%B indicators...")
+    # Pre-compute RSI, BB%B, ATR(14), 20/50 MA for all tickers
+    print("Computing RSI, BB%B, ATR, and MA indicators...")
     rsi_df  = close[tickers].apply(lambda s: calc_rsi(s, 14))
     pctb_df = close[tickers].apply(lambda s: calc_bb_pctb(s, 20))
+
+    # ATR(14): true range rolling mean
+    tk_high  = high_[[t for t in tickers if t in high_.columns]]
+    tk_low   = low_[[t  for t in tickers if t in low_.columns]]
+    tk_close = close[[t for t in tickers if t in close.columns]]
+    tr = pd.concat([
+        tk_high - tk_low,
+        (tk_high - tk_close.shift(1)).abs(),
+        (tk_low  - tk_close.shift(1)).abs(),
+    ]).groupby(level=0).max()
+    atr_df  = tr.rolling(14).mean()
+    ma20_df = tk_close.rolling(20).mean()
+    ma50_df = tk_close.rolling(50).mean()
 
     rows = []
     trading_days = [i for i, d in enumerate(close.index)
@@ -210,7 +282,8 @@ def run_backtest(tickers, close, open_, years=YEARS_BACK):
 
         for ticker in tickers:
             tech, cross, sectors = build_day_signals(
-                ticker, day_idx, close, open_, rsi_df, pctb_df
+                ticker, day_idx, close, open_, high_, low_,
+                rsi_df, pctb_df, atr_df, ma20_df, ma50_df
             )
             if tech is None:
                 continue
@@ -413,7 +486,7 @@ def main():
 
     tickers = [args.ticker.upper()] if args.ticker else SCAN_TICKERS
 
-    close, open_ = download_all(years=args.years)
+    close, open_, high_, low_ = download_all(years=args.years)
 
     # Filter to tickers that exist in the downloaded data
     available = [t for t in tickers if t in close.columns]
@@ -421,7 +494,7 @@ def main():
     if missing:
         print(f"  Warning: no data for {missing}")
 
-    df = run_backtest(available, close, open_, years=args.years)
+    df = run_backtest(available, close, open_, high_, low_, years=args.years)
 
     if df.empty:
         print("No results — check date range or ticker list.")

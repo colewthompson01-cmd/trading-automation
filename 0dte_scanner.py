@@ -595,11 +595,6 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         signals.append(("Trend Regime", "Bullish" if tr_regime > 0 else "Bearish",
                         tr_regime, 1.0))
 
-    # Relative strength vs sector ETF (5-day)
-    rs = tech.get("rel_strength")
-    if rs is not None:
-        rs_vote = 1 if rs > 0.5 else (-1 if rs < -0.5 else 0)
-        signals.append(("Rel Strength", f"{rs:+.1f}% vs ETF", rs_vote, 0.75))
 
     # ── VIX regime: hard gate (replaces old -1.5 penalty) ───────────────────
     vix = tech.get("vix", 20)
