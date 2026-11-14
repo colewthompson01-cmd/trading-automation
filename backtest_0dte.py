@@ -24,12 +24,15 @@ NOTE: News sentiment is set to NEUTRAL for all historical days (can't
 """
 
 import sys, os, argparse, json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
+from pathlib import Path
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import importlib.util
+
+ALPACA_CACHE_DIR = Path(__file__).parent / "alpaca_cache"
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
 SCAN_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "AAPL", "TSLA", "META",
@@ -69,6 +72,64 @@ print("Loading scanner module...", end=" ", flush=True)
 _scanner = _load_scanner()
 build_recommendation = _scanner.build_recommendation
 print("OK")
+
+# ── ALPACA DATA LOADER ────────────────────────────────────────────────────
+def load_alpaca_data(tickers: list, start: date, end: date,
+                     refresh: bool = False) -> dict:
+    """
+    Load Alpaca minute bars for all tickers, using a per-ticker parquet cache.
+    Returns {ticker: DataFrame} with UTC-indexed minute bars.
+    Falls back to empty dict if Alpaca keys are not set.
+    """
+    if not (os.environ.get("ALPACA_API_KEY") and os.environ.get("ALPACA_SECRET_KEY")):
+        print("  ALPACA_API_KEY not set — skipping Alpaca data (run: source ~/.zshrc)")
+        return {}
+
+    _path = Path(__file__).parent / "alpaca_data.py"
+    if not _path.exists():
+        print("  alpaca_data.py not found — skipping")
+        return {}
+
+    spec = importlib.util.spec_from_file_location("alpaca_data", str(_path))
+    amod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(amod)
+
+    ALPACA_CACHE_DIR.mkdir(exist_ok=True)
+    result = {}
+    to_fetch = []
+
+    for ticker in tickers:
+        cache_file = ALPACA_CACHE_DIR / f"{ticker}.parquet"
+        if not refresh and cache_file.exists():
+            try:
+                df = pd.read_parquet(cache_file)
+                df.index = pd.to_datetime(df.index, utc=True)
+                cached_start = df.index.min().date()
+                cached_end   = df.index.max().date()
+                if cached_start <= start and cached_end >= (end - timedelta(days=3)):
+                    result[ticker] = df
+                    continue
+            except Exception:
+                pass
+        to_fetch.append(ticker)
+
+    if to_fetch:
+        print(f"  Fetching Alpaca minute bars for {len(to_fetch)} tickers "
+              f"({start} → {end})...")
+        # Batch in groups of 10 to stay within rate limits
+        for i in range(0, len(to_fetch), 10):
+            batch = to_fetch[i:i+10]
+            bars  = amod.fetch_intraday_batch(batch, start, end, verbose=False)
+            for ticker, df in bars.items():
+                if not df.empty:
+                    cache_file = ALPACA_CACHE_DIR / f"{ticker}.parquet"
+                    df.to_parquet(cache_file)
+                    result[ticker] = df
+                    print(f"    {ticker}: {len(df):,} bars cached")
+
+    got = sum(1 for v in result.values() if not v.empty)
+    print(f"  Alpaca: {got}/{len(tickers)} tickers loaded")
+    return result
 
 # ── HELPERS ───────────────────────────────────────────────────────────────
 def calc_rsi(series, period=14):
@@ -122,7 +183,7 @@ def download_all(years=YEARS_BACK):
 
 # ── BUILD SIGNAL DICT FOR ONE DAY ────────────────────────────────────────
 def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_df,
-                      atr_df, ma20_df, ma50_df):
+                      atr_df, ma20_df, ma50_df, alpaca_bars=None):
     """
     Construct the tech/cross/sectors dicts for one historical trading day.
     Uses prior-day data only (no lookahead) — simulates what you'd know
@@ -224,6 +285,25 @@ def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_d
         "vix_ts":       vix_ts,
     }
 
+    # ── Alpaca VWAP at 10 AM CT ───────────────────────────────────────────
+    alpaca_entry = None   # will replace yfinance open for P&L if available
+    if alpaca_bars and ticker in alpaca_bars and not alpaca_bars[ticker].empty:
+        try:
+            day_date_val = close.index[day_idx].date()
+            _path = Path(__file__).parent / "alpaca_data.py"
+            spec  = importlib.util.spec_from_file_location("alpaca_data", str(_path))
+            amod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(amod)
+            sig = amod.build_intraday_signals(ticker, alpaca_bars[ticker], day_date_val)
+            if sig:
+                tech["entry_vs_vwap"] = sig["entry_vs_vwap"]
+                tech["or_range_pct"]  = sig["or_range_pct"]
+                alpaca_entry = sig["entry_price"]
+                tech["_alpaca_entry"] = alpaca_entry
+                tech["_alpaca_close"] = sig["close_price"]
+        except Exception:
+            pass
+
     # ── Cross-asset ───────────────────────────────────────────────────────
     cross = {}
     for name, sym in CROSS_TICKERS.items():
@@ -250,7 +330,7 @@ def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_d
     return tech, cross, sectors
 
 # ── RUN BACKTEST ──────────────────────────────────────────────────────────
-def run_backtest(tickers, close, open_, high_, low_, years=YEARS_BACK):
+def run_backtest(tickers, close, open_, high_, low_, years=YEARS_BACK, alpaca_bars=None):
     cutoff = date.today() - timedelta(days=int(years * 365))
 
     # Pre-compute RSI, BB%B, ATR(14), 20/50 MA for all tickers
@@ -283,7 +363,8 @@ def run_backtest(tickers, close, open_, high_, low_, years=YEARS_BACK):
         for ticker in tickers:
             tech, cross, sectors = build_day_signals(
                 ticker, day_idx, close, open_, high_, low_,
-                rsi_df, pctb_df, atr_df, ma20_df, ma50_df
+                rsi_df, pctb_df, atr_df, ma20_df, ma50_df,
+                alpaca_bars=alpaca_bars,
             )
             if tech is None:
                 continue
@@ -301,11 +382,15 @@ def run_backtest(tickers, close, open_, high_, low_, years=YEARS_BACK):
             except Exception:
                 continue
 
-            # Actual intraday return (open → close)
+            # Intraday return — use Alpaca 10AM→close if available, else open→close
             try:
-                day_open  = float(open_[ticker].iloc[day_idx])
-                day_close = float(close[ticker].iloc[day_idx])
-                intraday  = round((day_close / day_open - 1) * 100, 3)
+                if tech.get("_alpaca_entry") and tech.get("_alpaca_close"):
+                    day_open  = tech["_alpaca_entry"]
+                    day_close = tech["_alpaca_close"]
+                else:
+                    day_open  = float(open_[ticker].iloc[day_idx])
+                    day_close = float(close[ticker].iloc[day_idx])
+                intraday = round((day_close / day_open - 1) * 100, 3)
             except Exception:
                 continue
 
@@ -482,6 +567,10 @@ def main():
     parser.add_argument("--ticker",         type=str,   default=None)
     parser.add_argument("--min-conviction", type=float, default=0)
     parser.add_argument("--save",           action="store_true")
+    parser.add_argument("--alpaca",         action="store_true",
+                        help="Use Alpaca minute bars for 10AM entry price + VWAP signal")
+    parser.add_argument("--refresh-cache",  action="store_true",
+                        help="Force re-download of Alpaca minute bar cache")
     args = parser.parse_args()
 
     tickers = [args.ticker.upper()] if args.ticker else SCAN_TICKERS
@@ -494,7 +583,16 @@ def main():
     if missing:
         print(f"  Warning: no data for {missing}")
 
-    df = run_backtest(available, close, open_, high_, low_, years=args.years)
+    # Optionally load Alpaca minute bars
+    alpaca_bars = None
+    if args.alpaca:
+        end   = date.today()
+        start = end - timedelta(days=int(args.years * 365) + 10)
+        alpaca_bars = load_alpaca_data(available, start, end,
+                                       refresh=args.refresh_cache)
+
+    df = run_backtest(available, close, open_, high_, low_, years=args.years,
+                      alpaca_bars=alpaca_bars)
 
     if df.empty:
         print("No results — check date range or ticker list.")

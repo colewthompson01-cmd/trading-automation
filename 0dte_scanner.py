@@ -409,6 +409,25 @@ def get_ticker_technicals(ticker, market_tech):
         except Exception:
             pass
 
+        # VWAP at 10 AM CT via Alpaca minute bars (optional — needs ALPACA_API_KEY)
+        try:
+            if os.environ.get("ALPACA_API_KEY") and os.environ.get("ALPACA_SECRET_KEY"):
+                import importlib.util as _ilu, sys as _sys
+                _sp = os.path.join(os.path.dirname(__file__), "alpaca_data.py")
+                if os.path.exists(_sp):
+                    _spec = _ilu.spec_from_file_location("alpaca_data", _sp)
+                    _amod = _ilu.module_from_spec(_spec)
+                    _spec.loader.exec_module(_amod)
+                    _bars = _amod.fetch_minute_bars(ticker, date.today(),
+                                                    date.today() + timedelta(days=1))
+                    if not _bars.empty:
+                        _sig = _amod.build_intraday_signals(ticker, _bars, date.today())
+                        if _sig:
+                            result["entry_vs_vwap"] = _sig["entry_vs_vwap"]
+                            result["or_range_pct"]  = _sig["or_range_pct"]
+        except Exception:
+            pass
+
         # Earnings veto: skip ±1 trading day of earnings
         try:
             cal = yf.Ticker(ticker).calendar
@@ -576,6 +595,12 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
     if pcr is not None:
         pcr_vote = -1 if pcr > 1.1 else (1 if pcr < 0.75 else 0)
         signals.append(("Put/Call Ratio", f"{pcr:.2f}", pcr_vote, 0.75))
+
+    # VWAP position at 10 AM CT (from Alpaca minute bars when available)
+    entry_vs_vwap = tech.get("entry_vs_vwap")
+    if entry_vs_vwap is not None:
+        vwap_vote = 1 if entry_vs_vwap > 0.1 else (-1 if entry_vs_vwap < -0.1 else 0)
+        signals.append(("VWAP Position", f"{entry_vs_vwap:+.2f}% vs VWAP", vwap_vote, 1.0))
 
     # Gap ATR — gap size relative to ATR(14); >1.5 = exhaustion (neutral)
     gap_atr = tech.get("gap_atr")

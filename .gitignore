@@ -2,3 +2,5 @@ briefing.log
 __pycache__/
 *.pyc
 .DS_Store
+alpaca_cache/
+backtest_results.csv
