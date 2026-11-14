@@ -28,6 +28,10 @@ SEND_EMAIL         = "--email" in sys.argv
 
 MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "TSLA"]
 
+# Tickers to scan — only those with today's 0DTE expiry will be included
+SCAN_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "AAPL", "TSLA", "META",
+                "AMZN", "MSFT", "GOOGL", "AMD", "MU", "NFLX", "COIN"]
+
 SECTORS = {
     "Tech":       "XLK",
     "Financials": "XLF",
@@ -297,6 +301,107 @@ def get_spy_0dte_chain(spy_price, direction):
     except Exception:
         return [], None
 
+# ── 7b. 0DTE EXPIRY CHECK ────────────────────────────────────────────────
+def check_0dte_expiry(ticker):
+    """Return today's expiry string if 0DTE options exist for this ticker, else None."""
+    try:
+        today = date.today().strftime("%Y-%m-%d")
+        exps  = yf.Ticker(ticker).options
+        return today if today in exps else None
+    except Exception:
+        return None
+
+# ── 7c. PER-TICKER TECHNICALS ────────────────────────────────────────────
+def get_ticker_technicals(ticker, market_tech):
+    """Fetch RSI, BB%B, pre-market move for any ticker; merge market-wide signals."""
+    result = {
+        "futures_pct": market_tech.get("futures_pct", 0),
+        "vix":         market_tech.get("vix"),
+        "vix_chg":     market_tech.get("vix_chg", 0),
+    }
+    try:
+        t    = yf.Ticker(ticker)
+        hist = t.history(period="30d")
+        h1m  = t.history(period="1d", interval="1m", prepost=True)
+        h2d  = t.history(period="2d")
+        prev    = float(h2d["Close"].iloc[-2])
+        current = float(h1m["Close"].iloc[-1])
+        result["tk_price"]  = round(current, 2)
+        result["tk_premkt"] = round((current / prev - 1) * 100, 2)
+        result["tk_rsi"]    = calc_rsi(hist["Close"])
+        result["tk_pctb"]   = calc_bb_pctb(hist["Close"])
+    except Exception as e:
+        result["tk_error"] = str(e)
+    return result
+
+# ── 7d. PER-TICKER NEWS ───────────────────────────────────────────────────
+def get_ticker_news(ticker):
+    """RSS sentiment for a specific ticker."""
+    headlines = rss_fetch(f"{ticker} stock today", max_items=8)
+    pos = neg = 0
+    for h in headlines:
+        words = set(h.lower().split())
+        pos  += len(words & POS_WORDS)
+        neg  += len(words & NEG_WORDS)
+    net   = pos - neg
+    label = "BULLISH" if net > 1 else ("BEARISH" if net < -1 else "NEUTRAL")
+    return label, net
+
+# ── 7e. GENERALIZED 0DTE CHAIN ───────────────────────────────────────────
+def get_0dte_chain(ticker, price, direction):
+    try:
+        t     = yf.Ticker(ticker)
+        today = date.today().strftime("%Y-%m-%d")
+        exps  = t.options
+        exp   = today if today in exps else (exps[0] if exps else None)
+        if not exp:
+            return [], None
+        chain = t.option_chain(exp)
+        df    = (chain.calls if direction == "CALL" else chain.puts).copy()
+        df    = df[(df["strike"] >= price * 0.97) & (df["strike"] <= price * 1.03)]
+        if direction == "CALL":
+            df = df[df["strike"] >= price * 0.998]
+        else:
+            df = df[df["strike"] <= price * 1.002]
+        df = df[df["openInterest"].fillna(0) > 10]
+        df["_dist"] = abs(df["strike"] - price)
+        df = df.sort_values("_dist")
+        keep = ["strike", "lastPrice", "bid", "ask", "volume",
+                "openInterest", "impliedVolatility", "delta"]
+        cols = [c for c in keep if c in df.columns]
+        return df[cols].head(4).to_dict("records"), exp
+    except Exception:
+        return [], None
+
+# ── 7f. SCAN ONE TICKER ───────────────────────────────────────────────────
+def scan_ticker(ticker, market_tech, cross, sectors, cat_score):
+    """Run full signal analysis for one ticker. Returns result dict."""
+    exp_date = check_0dte_expiry(ticker)
+    if not exp_date:
+        return {"ticker": ticker, "has_0dte": False}
+
+    tech               = get_ticker_technicals(ticker, market_tech)
+    sentiment, sent_net = get_ticker_news(ticker)
+    direction, conviction, go_nogo, signals = build_recommendation(
+        tech, cross, sectors, sentiment, cat_score
+    )
+    price = tech.get("tk_price", 0)
+    chain, _ = get_0dte_chain(ticker, price, direction) if direction != "NO TRADE" else ([], None)
+
+    return {
+        "ticker":     ticker,
+        "has_0dte":   True,
+        "tech":       tech,
+        "direction":  direction,
+        "conviction": conviction,
+        "go_nogo":    go_nogo,
+        "signals":    signals,
+        "chain":      chain,
+        "exp_date":   exp_date,
+        "sentiment":  sentiment,
+        "sent_net":   sent_net,
+    }
+
 # ── 8. SCORE + RECOMMEND ──────────────────────────────────────────────────
 def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net=0):
     signals = []  # (label, display_value, vote [-1/0/1], weight)
@@ -306,10 +411,11 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         vote = 1 if fp > 0.1 else (-1 if fp < -0.1 else 0)
         signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 2))
 
-    if "spy_premkt" in tech:
-        sp   = tech["spy_premkt"]
-        vote = 1 if sp > 0.1 else (-1 if sp < -0.1 else 0)
-        signals.append(("SPY Pre-Market", f"{sp:+.2f}%", vote, 2))
+    # Support both SPY-specific keys (single-ticker mode) and generic tk_* keys
+    premkt = tech.get("tk_premkt", tech.get("spy_premkt"))
+    if premkt is not None:
+        vote = 1 if premkt > 0.1 else (-1 if premkt < -0.1 else 0)
+        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, 2))
 
     if "vix_chg" in tech:
         vc   = tech["vix_chg"]
@@ -335,15 +441,15 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         sec_vote = 1 if pos > neg else (-1 if neg > pos else 0)
         signals.append(("Sector Pulse", f"{pos} up / {neg} dn", sec_vote, 1))
 
-    if "spy_rsi" in tech:
-        rsi  = tech["spy_rsi"]
+    rsi = tech.get("tk_rsi", tech.get("spy_rsi"))
+    if rsi is not None:
         vote = 1 if rsi < 45 else (-1 if rsi > 60 else 0)
-        signals.append(("SPY RSI", str(rsi), vote, 1))
+        signals.append(("RSI (14)", str(rsi), vote, 1))
 
-    if "spy_pctb" in tech:
-        pb   = tech["spy_pctb"]
-        vote = -1 if pb > 0.8 else (1 if pb < 0.2 else 0)
-        signals.append(("BB %B", str(pb), vote, 1))
+    pctb = tech.get("tk_pctb", tech.get("spy_pctb"))
+    if pctb is not None:
+        vote = -1 if pctb > 0.8 else (1 if pctb < 0.2 else 0)
+        signals.append(("BB %B", str(pctb), vote, 1))
 
     if analyst_net != 0:
         a_vote = 1 if analyst_net > 0 else -1
@@ -724,6 +830,196 @@ def format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
   </div>
 </div></body></html>"""
 
+# ── MULTI-TICKER EMAIL ───────────────────────────────────────────────────
+def format_multi_html(results, market_tech, cross, sectors):
+    NAV, POS, NEG = "#1F4E79", "#276221", "#9C0006"
+    today_str = datetime.now().strftime("%A, %B %d, %Y")
+    run_time  = datetime.now().strftime("%I:%M %p CT")
+
+    go_results    = [r for r in results if r.get("has_0dte") and r["go_nogo"] == "GO"]
+    no_results    = [r for r in results if r.get("has_0dte") and r["go_nogo"] != "GO"]
+    no_expiry     = [r for r in results if not r.get("has_0dte")]
+
+    # Sort GO by conviction desc
+    go_results.sort(key=lambda r: r["conviction"], reverse=True)
+
+    # ── Market overview strip ─────────────────────────────────────────────
+    vix     = market_tech.get("vix", "—")
+    vix_chg = market_tech.get("vix_chg", 0)
+    fut_pct = market_tech.get("futures_pct", 0)
+    vix_col = POS if isinstance(vix, float) and 15 <= vix <= 28 else NEG
+    fut_col = POS if fut_pct >= 0 else NEG
+
+    overview_cells = (
+        f'<td style="padding:10px 16px;text-align:center;">'
+        f'<div style="font-size:11px;color:#9ab5cc;text-transform:uppercase;">VIX</div>'
+        f'<div style="font-size:15px;font-weight:bold;color:{vix_col};">{vix}</div>'
+        f'<div style="font-size:11px;color:#9ab5cc;">{vix_chg:+.2f} chg</div></td>'
+        f'<td style="padding:10px 16px;text-align:center;">'
+        f'<div style="font-size:11px;color:#9ab5cc;text-transform:uppercase;">ES Futures</div>'
+        f'<div style="font-size:15px;font-weight:bold;color:{fut_col};">{fut_pct:+.2f}%</div>'
+        f'<div style="font-size:11px;color:#9ab5cc;">overnight</div></td>'
+    )
+    for name, data in list(cross.items())[:3]:
+        col = POS if data["pct"] >= 0 else NEG
+        arr = "&#x25B2;" if data["pct"] >= 0 else "&#x25BC;"
+        overview_cells += (
+            f'<td style="padding:10px 16px;text-align:center;">'
+            f'<div style="font-size:11px;color:#9ab5cc;text-transform:uppercase;">{name}</div>'
+            f'<div style="font-size:15px;font-weight:bold;color:{col};">{arr} {data["pct"]:+.2f}%</div>'
+            f'<div style="font-size:11px;color:#9ab5cc;">{data["price"]:.2f}</div></td>'
+        )
+
+    # ── GO ticker cards ───────────────────────────────────────────────────
+    go_cards = ""
+    for r in go_results:
+        ticker    = r["ticker"]
+        direction = r["direction"]
+        conviction= r["conviction"]
+        chain     = r.get("chain", [])
+        exp_date  = r.get("exp_date", "Today")
+        tech      = r.get("tech", {})
+        price     = tech.get("tk_price", tech.get("spy_price", 0))
+        premkt    = tech.get("tk_premkt", tech.get("spy_premkt", 0))
+        sentiment = r.get("sentiment", "NEUTRAL")
+        signals   = r.get("signals", [])
+
+        bg       = "#1a7a1a" if direction == "CALL" else "#7a1a1a"
+        dir_icon = "&#x25B2;" if direction == "CALL" else "&#x25BC;"
+        p_col    = POS if premkt >= 0 else NEG
+
+        # Signal rows (compact, 2 per row)
+        sig_pairs = []
+        for i in range(0, len(signals), 2):
+            left  = signals[i]
+            right = signals[i+1] if i+1 < len(signals) else None
+            l_col = POS if left[2] > 0 else (NEG if left[2] < 0 else "#888")
+            l_arr = "&#x25B2;" if left[2] > 0 else ("&#x25BC;" if left[2] < 0 else "&mdash;")
+            row = (f'<tr>'
+                   f'<td style="padding:4px 8px;font-size:12px;color:#555;">{left[0]}</td>'
+                   f'<td style="padding:4px 8px;font-size:12px;">{left[1]}</td>'
+                   f'<td style="padding:4px 8px;font-size:12px;color:{l_col};font-weight:bold;">{l_arr}</td>')
+            if right:
+                r_col = POS if right[2] > 0 else (NEG if right[2] < 0 else "#888")
+                r_arr = "&#x25B2;" if right[2] > 0 else ("&#x25BC;" if right[2] < 0 else "&mdash;")
+                row += (f'<td style="padding:4px 8px;font-size:12px;color:#555;border-left:1px solid #eee;">{right[0]}</td>'
+                        f'<td style="padding:4px 8px;font-size:12px;">{right[1]}</td>'
+                        f'<td style="padding:4px 8px;font-size:12px;color:{r_col};font-weight:bold;">{r_arr}</td>')
+            else:
+                row += '<td colspan="3"></td>'
+            row += '</tr>'
+            sig_pairs.append(row)
+
+        # ATP quick entry (compact)
+        atp_block = ""
+        if chain:
+            best      = chain[0]
+            mid       = round((best.get("bid", 0) + best.get("ask", 0)) / 2, 2)
+            cost      = round(mid * 100, 2)
+            stop_p    = round(mid * 0.50, 2)
+            stop_loss = round(stop_p * 100, 2)
+            atp_block = f"""
+    <div style="background:#fffbe6;padding:10px 14px;border-top:2px solid #e6a800;">
+      <div style="font-size:11px;font-weight:bold;color:#7a5500;text-transform:uppercase;
+        letter-spacing:1px;margin-bottom:8px;">&#x1F4CB; ATP Quick Entry</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <tr>
+          <td style="padding:3px 6px;color:#555;width:35%;">Strike / Type</td>
+          <td style="padding:3px 6px;font-weight:bold;">${best["strike"]:.0f} {direction} &nbsp;
+            <span style="color:#888;font-weight:normal;">{exp_date} (0DTE)</span></td>
+        </tr>
+        <tr style="background:#fff8e6;">
+          <td style="padding:3px 6px;color:#555;">Limit Price</td>
+          <td style="padding:3px 6px;font-weight:bold;">${mid:.2f}
+            <span style="color:#888;font-weight:normal;">(~${cost:.0f}/contract)</span></td>
+        </tr>
+        <tr>
+          <td style="padding:3px 6px;color:#555;">Stop</td>
+          <td style="padding:3px 6px;font-weight:bold;">${stop_p:.2f}
+            <span style="color:#888;font-weight:normal;">(-50%, ~${stop_loss:.0f} loss/contract)</span></td>
+        </tr>
+      </table>
+    </div>"""
+
+        go_cards += f"""
+  <div style="border:2px solid {bg};border-radius:6px;margin:0 28px 16px;overflow:hidden;">
+    <div style="background:{bg};padding:12px 16px;">
+      <span style="color:#fff;font-size:15px;font-weight:bold;">
+        {dir_icon} {ticker} &mdash; GO {direction}</span>
+      <span style="float:right;color:rgba(255,255,255,0.8);font-size:13px;">
+        Conviction: {conviction}/10</span>
+    </div>
+    <div style="padding:8px 14px;background:#fafafa;font-size:12px;color:#555;">
+      Price: <strong>${price:.2f}</strong> &nbsp;
+      Pre-mkt: <strong style="color:{p_col};">{premkt:+.2f}%</strong> &nbsp;
+      News: <strong>{sentiment}</strong>
+    </div>
+    {atp_block}
+    <div style="padding:10px 14px;">
+      <table style="width:100%;border-collapse:collapse;">{''.join(sig_pairs)}</table>
+    </div>
+  </div>"""
+
+    # ── NO TRADE tickers ─────────────────────────────────────────────────
+    no_rows = ""
+    for r in no_results:
+        ticker    = r["ticker"]
+        conviction= r["conviction"]
+        direction = r["direction"]
+        tech      = r.get("tech", {})
+        premkt    = tech.get("tk_premkt", tech.get("spy_premkt", 0))
+        p_col     = POS if premkt >= 0 else NEG
+        no_rows += (f'<tr><td style="padding:6px 10px;">{ticker}</td>'
+                    f'<td style="padding:6px 10px;">{direction}</td>'
+                    f'<td style="padding:6px 10px;">{conviction}/10</td>'
+                    f'<td style="padding:6px 10px;color:{p_col};">{premkt:+.2f}%</td></tr>')
+
+    no_expiry_text = ""
+    if no_expiry:
+        names = ", ".join(r["ticker"] for r in no_expiry)
+        no_expiry_text = (f'<div style="padding:8px 28px;font-size:12px;color:#888;">'
+                          f'No 0DTE options today: {names}</div>')
+
+    go_count = len(go_results)
+    scan_count = len([r for r in results if r.get("has_0dte")])
+    summary_col = POS if go_count > 0 else "#888"
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,sans-serif;">
+<div style="max-width:680px;margin:24px auto;background:#fff;border-radius:8px;
+  overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+  <div style="background:{NAV};padding:20px 28px;">
+    <div style="color:#fff;font-size:18px;font-weight:bold;">0DTE MULTI-TICKER SCANNER</div>
+    <div style="color:#DCE6F1;font-size:13px;margin-top:4px;">{today_str}</div>
+    <div style="color:#9ab5cc;font-size:11px;margin-top:2px;">Generated {run_time}
+      &nbsp;&mdash;&nbsp; {scan_count} tickers with 0DTE options
+      &nbsp;&mdash;&nbsp; <span style="color:{summary_col};font-weight:bold;">{go_count} GO signal{'s' if go_count != 1 else ''}</span>
+    </div>
+  </div>
+
+  <div style="background:#2a3f5a;padding:0;">
+    <table style="width:100%;border-collapse:collapse;">{overview_cells}</table>
+  </div>
+
+  <div style="padding:20px 28px 8px;">
+    {_sec("GO Signals" if go_count > 0 else "No GO Signals Today")}
+  </div>
+
+  {'<div style="padding:8px 28px 4px;font-size:13px;color:#888;">No GO signals this scan. All signals below conviction threshold or mixed direction.</div>' if go_count == 0 else go_cards}
+
+  {'<div style="padding:16px 28px 8px;"><div style="font-size:13px;font-weight:bold;color:' + NAV + ';text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ' + NAV + ';padding-bottom:6px;margin-bottom:14px;">No Trade</div><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="background:#DCE6F1;"><td style="padding:7px 10px;font-weight:bold;">Ticker</td><td style="padding:7px 10px;font-weight:bold;">Direction</td><td style="padding:7px 10px;font-weight:bold;">Conviction</td><td style="padding:7px 10px;font-weight:bold;">Pre-mkt</td></tr>' + no_rows + '</table></div>' if no_rows else ''}
+
+  {no_expiry_text}
+
+  <div style="background:#f4f4f4;padding:12px 28px;font-size:11px;color:#888;
+    text-align:center;border-top:1px solid #e0e0e0;margin-top:16px;">
+    Generated by Claude &nbsp;|&nbsp; For informational purposes only — not financial advice
+  </div>
+</div></body></html>"""
+
 # ── SEND EMAIL ────────────────────────────────────────────────────────────
 def send_email(subject, html_body):
     if not GMAIL_APP_PASSWORD:
@@ -740,35 +1036,38 @@ def send_email(subject, html_body):
 
 # ── MAIN ──────────────────────────────────────────────────────────────────
 def main():
-    print(f"{datetime.now():%Y-%m-%d %H:%M}  Running 0DTE scanner...")
+    print(f"{datetime.now():%Y-%m-%d %H:%M}  Running 0DTE multi-ticker scanner...")
 
-    catalysts, cat_score        = get_catalysts()
-    tech                        = get_market_technicals()
-    cross                       = get_cross_asset()
-    sectors                     = get_sector_pulse()
-    sentiment, sent_net, _      = get_news_sentiment()
-    analyst                     = get_analyst_signals()
+    # Fetch market-wide data once
+    catalysts, cat_score   = get_catalysts()
+    market_tech            = get_market_technicals()
+    cross                  = get_cross_asset()
+    sectors                = get_sector_pulse()
 
-    direction, conviction, go_nogo, signals = build_recommendation(
-        tech, cross, sectors, sentiment, cat_score, analyst_net=analyst[2]
-    )
+    # Scan each ticker
+    results = []
+    for ticker in SCAN_TICKERS:
+        print(f"  Scanning {ticker}...", end=" ", flush=True)
+        r = scan_ticker(ticker, market_tech, cross, sectors, cat_score)
+        results.append(r)
+        if not r["has_0dte"]:
+            print("no 0DTE today")
+        else:
+            print(f"{r['go_nogo']} {r['direction']} ({r['conviction']}/10)")
 
-    spy_price = tech.get("spy_price", 580.0)
-    if direction != "NO TRADE":
-        chain, exp_date = get_spy_0dte_chain(spy_price, direction)
-    else:
-        chain, exp_date = [], None
+    go_results = [r for r in results if r.get("has_0dte") and r["go_nogo"] == "GO"]
+    go_results.sort(key=lambda r: r["conviction"], reverse=True)
 
-    print_report(tech, cross, sectors, catalysts, sentiment, sent_net,
-                 signals, direction, conviction, go_nogo, chain, exp_date,
-                 analyst=analyst)
+    print(f"\n  {len(go_results)} GO signal(s) found")
+    for r in go_results:
+        print(f"  ★  {r['ticker']:6s} {r['direction']:4s}  Conviction {r['conviction']}/10")
 
     if SEND_EMAIL:
-        html    = format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
-                              signals, direction, conviction, go_nogo, chain, exp_date,
-                              analyst=analyst)
-        subject = (f"🎯 0DTE Scanner — {go_nogo} {direction} — "
-                   f"Conviction {conviction}/10 — {datetime.now().strftime('%a %b %d')}")
+        html = format_multi_html(results, market_tech, cross, sectors)
+        go_summary = (", ".join(f"{r['ticker']} {r['direction']}" for r in go_results)
+                      if go_results else "No GO signals")
+        subject = (f"\U0001f3af 0DTE Scanner — {go_summary} — "
+                   f"{datetime.now().strftime('%a %b %d %I:%M %p CT')}")
         send_email(subject, html)
         print(f"{datetime.now():%Y-%m-%d %H:%M}  Emailed to {EMAIL_TO}")
 
