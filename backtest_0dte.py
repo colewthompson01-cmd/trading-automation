@@ -33,7 +33,9 @@ import importlib.util
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
 SCAN_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "AAPL", "TSLA", "META",
-                "AMZN", "MSFT", "GOOGL", "AMD", "MU", "NFLX", "COIN"]
+                "AMZN", "MSFT", "GOOGL", "AMD", "MU", "NFLX", "COIN",
+                # Candidates under evaluation
+                "MSTR", "PLTR", "CRWD", "ARM", "HOOD", "SQ", "PANW", "SMCI"]
 
 SECTORS = {
     "Tech":        "XLK",
@@ -214,8 +216,10 @@ def run_backtest(tickers, close, open_, years=YEARS_BACK):
                 continue
 
             # Sentiment = NEUTRAL (can't replay historical news)
+            # cat_score baseline of 2 approximates an average trading day
+            # (real scanner adds 0-5; without this, conviction never reaches 5)
             sentiment = "NEUTRAL"
-            cat_score = 0
+            cat_score = 2
 
             try:
                 direction, conviction, go_nogo, signals = build_recommendation(
@@ -317,7 +321,8 @@ def analyze(df, min_conviction=0):
     # ── By ticker ─────────────────────────────────────────────────────────
     print_section("WIN RATE BY TICKER")
     print(f"  {'Ticker':<8} {'Win%':>6}  {'Trades':>7}  {'Avg Conviction':>15}")
-    for ticker in SCAN_TICKERS:
+    active_tickers = go_df["ticker"].unique()
+    for ticker in [t for t in SCAN_TICKERS if t in active_tickers]:
         t_df = go_df[go_df["ticker"] == ticker]
         wr, n = win_rate(t_df)
         avg_conv = round(t_df["conviction"].mean(), 1) if not t_df.empty else 0

@@ -32,8 +32,8 @@ SEND_EMAIL         = "--email" in sys.argv
 MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "TSLA"]
 
 # Tickers to scan — only those with today's 0DTE expiry will be included
-SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "COIN"]
-# Removed (Fable backtest: <30% win rate on GO trades): SPY, QQQ, IWM, AAPL, GOOGL, MSFT
+SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "MSTR", "HOOD"]
+# Removed (<45% win rate at conviction >=7): SPY, QQQ, IWM, AAPL, GOOGL, MSFT, COIN
 
 SECTORS = {
     "Tech":       "XLK",
@@ -42,6 +42,19 @@ SECTORS = {
     "Healthcare": "XLV",
     "Comms":      "XLC",
     "Industrials":"XLI",
+}
+
+# Sector ETF benchmark per ticker (for relative-strength signal)
+TICKER_SECTOR_ETF = {
+    "NVDA": "SMH",
+    "AMD":  "SMH",
+    "MU":   "SMH",
+    "TSLA": "XLY",
+    "META": "XLC",
+    "AMZN": "XLC",
+    "NFLX": "XLC",
+    "MSTR": "XLF",
+    "HOOD": "XLF",
 }
 
 _SSL_CTX = ssl.create_default_context()
@@ -164,14 +177,43 @@ def get_market_technicals():
         pass
 
     try:
-        vix = yf.Ticker("^VIX").history(period="2d")
-        result["vix"]     = round(float(vix["Close"].iloc[-1]), 2)
-        result["vix_prev"]= round(float(vix["Close"].iloc[-2]), 2)
+        vix_hist          = yf.Ticker("^VIX").history(period="1y")
+        result["vix"]     = round(float(vix_hist["Close"].iloc[-1]), 2)
+        result["vix_prev"]= round(float(vix_hist["Close"].iloc[-2]), 2)
         result["vix_chg"] = round(result["vix"] - result["vix_prev"], 2)
+        # IVR: where current VIX sits in its 52-week range (0–100)
+        lo, hi = float(vix_hist["Close"].min()), float(vix_hist["Close"].max())
+        if hi > lo:
+            result["vix_ivr"] = round((result["vix"] - lo) / (hi - lo) * 100, 1)
+    except Exception:
+        pass
+
+    # VIX term structure: VIX / VIX3M — >1.0 = backwardation (fear premium)
+    try:
+        vix3m = yf.Ticker("^VIX3M").history(period="2d")
+        if len(vix3m) >= 1 and "vix" in result:
+            result["vix_ts"] = round(result["vix"] / float(vix3m["Close"].iloc[-1]), 3)
     except Exception:
         pass
 
     return result
+
+# ── 2b. PUT/CALL RATIO ───────────────────────────────────────────────────
+def get_put_call_ratio():
+    """SPY market put/call ratio from nearest-expiry options chain."""
+    try:
+        spy  = yf.Ticker("SPY")
+        exps = spy.options
+        if not exps:
+            return None
+        chain    = spy.option_chain(exps[0])
+        put_vol  = chain.puts["volume"].fillna(0).sum()
+        call_vol = chain.calls["volume"].fillna(0).sum()
+        if call_vol > 0:
+            return round(float(put_vol / call_vol), 2)
+    except Exception:
+        pass
+    return None
 
 # ── 3. CROSS-ASSET ────────────────────────────────────────────────────────
 def get_cross_asset():
@@ -309,13 +351,16 @@ def check_0dte_expiry(ticker):
 def get_ticker_technicals(ticker, market_tech):
     """Fetch RSI, BB%B, pre-market move for any ticker; merge market-wide signals."""
     result = {
-        "futures_pct": market_tech.get("futures_pct", 0),
-        "vix":         market_tech.get("vix"),
-        "vix_chg":     market_tech.get("vix_chg", 0),
+        "futures_pct":    market_tech.get("futures_pct", 0),
+        "vix":            market_tech.get("vix"),
+        "vix_chg":        market_tech.get("vix_chg", 0),
+        "vix_ivr":        market_tech.get("vix_ivr"),
+        "vix_ts":         market_tech.get("vix_ts"),
+        "put_call_ratio": market_tech.get("put_call_ratio"),
     }
     try:
         t    = yf.Ticker(ticker)
-        hist = t.history(period="30d")
+        hist = t.history(period="60d")   # 60d needed for 50-MA trend regime
         h1m  = t.history(period="1d", interval="1m", prepost=True)
         h2d  = t.history(period="2d")
         prev    = float(h2d["Close"].iloc[-2])
@@ -324,6 +369,62 @@ def get_ticker_technicals(ticker, market_tech):
         result["tk_premkt"] = round((current / prev - 1) * 100, 2)
         result["tk_rsi"]    = calc_rsi(hist["Close"])
         result["tk_pctb"]   = calc_bb_pctb(hist["Close"])
+
+        # Gap ATR: today's gap size relative to ATR(14)
+        try:
+            today_open = float(h1m["Open"].iloc[0])
+            tr = pd.concat([
+                hist["High"] - hist["Low"],
+                (hist["High"] - hist["Close"].shift(1)).abs(),
+                (hist["Low"]  - hist["Close"].shift(1)).abs(),
+            ], axis=1).max(axis=1)
+            atr = float(tr.rolling(14).mean().iloc[-2])
+            if atr > 0:
+                result["gap_atr"] = round((today_open - prev) / atr, 2)
+        except Exception:
+            pass
+
+        # Trend regime: price vs 20/50 MA alignment
+        try:
+            s20 = float(hist["Close"].rolling(20).mean().iloc[-1])
+            s50 = float(hist["Close"].rolling(50).mean().iloc[-1])
+            if prev > s20 and s20 > s50:
+                result["trend_regime"] = 1
+            elif prev < s20 and s20 < s50:
+                result["trend_regime"] = -1
+            else:
+                result["trend_regime"] = 0
+        except Exception:
+            pass
+
+        # Relative strength vs sector ETF (5-day)
+        try:
+            etf_sym = TICKER_SECTOR_ETF.get(ticker)
+            if etf_sym and len(hist) >= 6:
+                etf_hist = yf.Ticker(etf_sym).history(period="15d")
+                if len(etf_hist) >= 6:
+                    etf_rs = float(etf_hist["Close"].iloc[-1]) / float(etf_hist["Close"].iloc[-6]) - 1
+                    tk_rs  = float(hist["Close"].iloc[-1])     / float(hist["Close"].iloc[-6])     - 1
+                    result["rel_strength"] = round((tk_rs - etf_rs) * 100, 2)
+        except Exception:
+            pass
+
+        # Earnings veto: skip ±1 trading day of earnings
+        try:
+            cal = yf.Ticker(ticker).calendar
+            if cal:
+                dates = cal.get("Earnings Date", []) if isinstance(cal, dict) else []
+                if not isinstance(dates, list):
+                    dates = [dates]
+                today = date.today()
+                for ed in dates:
+                    ed_date = ed.date() if hasattr(ed, "date") else ed
+                    if isinstance(ed_date, date) and abs((ed_date - today).days) <= 1:
+                        result["earnings_veto"] = True
+                        break
+        except Exception:
+            pass
+
     except Exception as e:
         result["tk_error"] = str(e)
     return result
@@ -398,8 +499,9 @@ def scan_ticker(ticker, market_tech, cross, sectors, cat_score):
 import math as _math
 
 # ── Signal weight tuning (Fable-optimized, Nov 2026 backtest) ────────────────
-_GO_THRESHOLD_CALL    = 6.0   # min conviction for CALL → GO
-_GO_THRESHOLD_PUT     = 7.0   # PUTs must clear higher bar (31.5% vs 40.9% win)
+_GO_THRESHOLD_CALL    = 7.0   # min conviction for CALL → GO
+_GO_THRESHOLD_PUT     = 7.0   # same threshold — PUTs now perform equally
+_GO_CONVICTION_MAX    = 8.0   # cap — above 8 is over-signaled (44% win vs 60% at 7-8)
 _MIN_STRENGTH         = 0.25  # min signal strength to assign a direction
 _MIN_ACTIVE_SIGNALS   = 3     # min non-neutral signals to assign a direction
 _MIXED_MINORITY_SHARE = 0.25  # dissenting weight share that flags mixed
@@ -461,6 +563,44 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         a_vote = 1 if analyst_net > 0 else -1
         signals.append(("Analyst Ratings", f"{analyst_net:+d} net (7d)", a_vote, 0.25))
 
+    # VIX IVR — where current VIX sits in its 52-week range
+    # Low IVR (<30) = cheap options, favorable to buy; High (>70) = expensive, IV crush risk
+    vix_ivr = tech.get("vix_ivr")
+    if vix_ivr is not None:
+        ivr_vote = 1 if vix_ivr < 30 else (-1 if vix_ivr > 70 else 0)
+        signals.append(("VIX IVR", f"{vix_ivr:.0f}th pctile", ivr_vote, 0.75))
+
+    # Put/Call Ratio — market sentiment (live only, not in backtest)
+    # High P/C (>1.1) = heavy put buying = bearish; Low (<0.75) = bullish complacency
+    pcr = tech.get("put_call_ratio")
+    if pcr is not None:
+        pcr_vote = -1 if pcr > 1.1 else (1 if pcr < 0.75 else 0)
+        signals.append(("Put/Call Ratio", f"{pcr:.2f}", pcr_vote, 0.75))
+
+    # Gap ATR — gap size relative to ATR(14); >1.5 = exhaustion (neutral)
+    gap_atr = tech.get("gap_atr")
+    if gap_atr is not None:
+        if abs(gap_atr) > 1.5:
+            gap_vote, gap_lbl = 0, f"{gap_atr:.2f}x ATR (exhaustion)"
+        elif abs(gap_atr) >= 0.25:
+            gap_vote = 1 if gap_atr > 0 else -1
+            gap_lbl  = f"{gap_atr:.2f}x ATR"
+        else:
+            gap_vote, gap_lbl = 0, f"{gap_atr:.2f}x ATR (small)"
+        signals.append(("Gap ATR", gap_lbl, gap_vote, 0.75))
+
+    # Trend regime — 20/50 MA alignment; only trade with the trend
+    tr_regime = tech.get("trend_regime")
+    if tr_regime is not None and tr_regime != 0:
+        signals.append(("Trend Regime", "Bullish" if tr_regime > 0 else "Bearish",
+                        tr_regime, 1.0))
+
+    # Relative strength vs sector ETF (5-day)
+    rs = tech.get("rel_strength")
+    if rs is not None:
+        rs_vote = 1 if rs > 0.5 else (-1 if rs < -0.5 else 0)
+        signals.append(("Rel Strength", f"{rs:+.1f}% vs ETF", rs_vote, 0.75))
+
     # ── VIX regime: hard gate (replaces old -1.5 penalty) ───────────────────
     vix = tech.get("vix", 20)
     vix_is_num = isinstance(vix, (int, float))
@@ -509,15 +649,53 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         conviction = min(conviction, _MIXED_CONVICTION_CAP)
     conviction = round(conviction, 1)
 
+    # ── Structural gate + veto logic (Fable-recommended) ────────────────────
+    _pm_vote    = next((s[2] for s in signals if s[0] == "Pre-Market Move"), 0)
+    _vix_vote   = next((s[2] for s in signals if s[0] == "VIX Direction"), 0)
+    _sec_vote   = next((s[2] for s in signals if s[0] == "Sector Pulse"), 0)
+    _dxy_vote   = next((s[2] for s in signals if s[0] == "DXY"), 0)
+    _fut_vote   = next((s[2] for s in signals if s[0] == "S&P Futures"), 0)
+    _yield_vote = next((s[2] for s in signals if s[0] == "10Y Yield"), 0)
+
+    # Gate: PM must be active AND (VIX Direction agrees OR both DXY+Futures agree)
+    gate_pass = (_pm_vote != 0 and
+                 (_pm_vote == _vix_vote or
+                  (_pm_vote == _dxy_vote != 0 and _pm_vote == _fut_vote != 0)))
+
+    # Super filter: PM + VIX Direction + Sector Pulse all agree (~63-68% live)
+    super_filter = (_pm_vote != 0 and _pm_vote == _vix_vote == _sec_vote)
+
+    # Yield veto: PM and 10Y pointing same direction = weak setup (47% backtest)
+    yield_veto = (_yield_vote != 0 and _yield_vote == _pm_vote)
+
+    # VIX term structure: backwardation blocks calls (IV crush risk)
+    vix_ts = tech.get("vix_ts")
+    vix_ts_block = (vix_ts is not None and vix_ts > 1.0 and direction == "CALL")
+
+    # Earnings veto: skip ±1 day of earnings
+    earnings_veto = tech.get("earnings_veto", False)
+
     # ── GO / NO TRADE ────────────────────────────────────────────────────────
     go_threshold = _GO_THRESHOLD_PUT if direction == "PUT" else _GO_THRESHOLD_CALL
-    is_go = direction != "NO TRADE" and vix_ok and conviction >= go_threshold
+    is_go = (direction != "NO TRADE" and vix_ok
+             and go_threshold <= conviction <= _GO_CONVICTION_MAX
+             and gate_pass and not yield_veto
+             and not vix_ts_block and not earnings_veto)
 
-    go_nogo = "GO" if is_go else "NO TRADE"
+    star = " ⭐ SUPER FILTER" if (is_go and super_filter) else ""
+    go_nogo = f"GO{star}" if is_go else "NO TRADE"
     if mixed:
         go_nogo += " ⚠️ MIXED SIGNALS"
     if not vix_ok:
         go_nogo += f" ⚠️ VIX {regime} REGIME BLOCK"
+    if not gate_pass and direction != "NO TRADE":
+        go_nogo += " ⚠️ GATE FAIL"
+    if yield_veto:
+        go_nogo += " ⚠️ YIELD VETO"
+    if vix_ts_block:
+        go_nogo += " ⚠️ VIX BACKWARDATION"
+    if earnings_veto:
+        go_nogo += " ⚠️ EARNINGS WINDOW"
 
     return direction, conviction, go_nogo, signals
 
@@ -1125,10 +1303,11 @@ def main():
     print(f"{datetime.now():%Y-%m-%d %H:%M}  Running 0DTE multi-ticker scanner...")
 
     # Fetch market-wide data once
-    catalysts, cat_score   = get_catalysts()
-    market_tech            = get_market_technicals()
-    cross                  = get_cross_asset()
-    sectors                = get_sector_pulse()
+    catalysts, cat_score        = get_catalysts()
+    market_tech                 = get_market_technicals()
+    market_tech["put_call_ratio"] = get_put_call_ratio()
+    cross                       = get_cross_asset()
+    sectors                     = get_sector_pulse()
 
     # Scan each ticker
     results = []
