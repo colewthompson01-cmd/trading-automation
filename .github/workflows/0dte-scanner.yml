@@ -17,7 +17,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install yfinance pandas pandas_market_calendars requests
+        run: pip install yfinance pandas pandas_market_calendars requests vaderSentiment
 
       - name: Run 0DTE scanner
         env:

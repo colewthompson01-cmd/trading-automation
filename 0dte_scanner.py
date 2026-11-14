@@ -19,6 +19,9 @@ from email.mime.multipart import MIMEMultipart
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+_vader = SentimentIntensityAnalyzer()
 
 # ── CONFIG ────────────────────────────────────────────────────────────────
 EMAIL_TO           = "cole.w.thompson.01@gmail.com"
@@ -45,12 +48,6 @@ _SSL_CTX = ssl.create_default_context()
 _SSL_CTX.check_hostname = False
 _SSL_CTX.verify_mode    = ssl.CERT_NONE
 
-POS_WORDS = {"surge", "rally", "gain", "rise", "jump", "beat", "record",
-             "strong", "bullish", "optimism", "recovery", "rebound", "positive",
-             "high", "lifted", "climbed", "advanced"}
-NEG_WORDS = {"drop", "fall", "decline", "loss", "miss", "crash", "fear",
-             "weak", "bearish", "concern", "risk", "slump", "tumble", "sell",
-             "retreat", "slid", "fell", "plunge", "worries", "warning"}
 
 # ── HELPERS ───────────────────────────────────────────────────────────────
 def calc_rsi(series, period=14):
@@ -214,19 +211,16 @@ def get_sector_pulse():
 # ── 5. NEWS SENTIMENT ─────────────────────────────────────────────────────
 def get_news_sentiment():
     headlines = rss_fetch("S&P 500 stock market today", max_items=12)
-    pos = neg = 0
     scored = []
+    compounds = []
     for h in headlines:
-        words = set(h.lower().split())
-        p = len(words & POS_WORDS)
-        n = len(words & NEG_WORDS)
-        pos += p
-        neg += n
-        tone = "+" if p > n else ("-" if n > p else "~")
+        c = _vader.polarity_scores(h)["compound"]
+        compounds.append(c)
+        tone = "+" if c >= 0.05 else ("-" if c <= -0.05 else "~")
         scored.append((tone, h))
-    net = pos - neg
-    label = "BULLISH" if net > 1 else ("BEARISH" if net < -1 else "NEUTRAL")
-    return label, net, scored[:6]
+    avg = sum(compounds) / len(compounds) if compounds else 0.0
+    label = "BULLISH" if avg >= 0.05 else ("BEARISH" if avg <= -0.05 else "NEUTRAL")
+    return label, round(avg, 3), scored[:6]
 
 # ── 6. ANALYST SIGNALS ───────────────────────────────────────────────────
 def get_analyst_signals():
@@ -336,16 +330,14 @@ def get_ticker_technicals(ticker, market_tech):
 
 # ── 7d. PER-TICKER NEWS ───────────────────────────────────────────────────
 def get_ticker_news(ticker):
-    """RSS sentiment for a specific ticker."""
+    """VADER sentiment for a specific ticker's RSS headlines."""
     headlines = rss_fetch(f"{ticker} stock today", max_items=8)
-    pos = neg = 0
-    for h in headlines:
-        words = set(h.lower().split())
-        pos  += len(words & POS_WORDS)
-        neg  += len(words & NEG_WORDS)
-    net   = pos - neg
-    label = "BULLISH" if net > 1 else ("BEARISH" if net < -1 else "NEUTRAL")
-    return label, net
+    if not headlines:
+        return "NEUTRAL", 0.0
+    compounds = [_vader.polarity_scores(h)["compound"] for h in headlines]
+    avg   = sum(compounds) / len(compounds)
+    label = "BULLISH" if avg >= 0.05 else ("BEARISH" if avg <= -0.05 else "NEUTRAL")
+    return label, round(avg, 3)
 
 # ── 7e. GENERALIZED 0DTE CHAIN ───────────────────────────────────────────
 def get_0dte_chain(ticker, price, direction):
@@ -455,9 +447,38 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         a_vote = 1 if analyst_net > 0 else -1
         signals.append(("Analyst Ratings", f"{analyst_net:+d} net (7d)", a_vote, 0.5))
 
+    # Dynamic weights based on VIX regime
+    vix = tech.get("vix", 20)
+    if isinstance(vix, (int, float)):
+        if vix < 15:        # low vol — momentum signals matter more
+            w_tech, w_sent = 1.5, 0.75
+        elif vix > 28:      # high vol — price action outweighs sentiment
+            w_tech, w_sent = 2.0, 0.5
+        else:               # normal — equal weighting
+            w_tech, w_sent = 1.0, 1.0
+    else:
+        w_tech, w_sent = 1.0, 1.0
+
+    # Apply regime weights: scale technicals (futures, premkt, RSI, BB) and sentiment
+    weighted_signals = []
+    for label, val, vote, base_w in signals:
+        if label in ("S&P Futures", "Pre-Market Move", "RSI (14)", "BB %B"):
+            weighted_signals.append((label, val, vote, base_w * w_tech))
+        elif label == "News Sentiment":
+            weighted_signals.append((label, val, vote, base_w * w_sent))
+        else:
+            weighted_signals.append((label, val, vote, base_w))
+    signals = weighted_signals
+
     total_w  = sum(s[3] for s in signals) or 1
     weighted = sum(s[2] * s[3] for s in signals)
     ratio    = weighted / total_w
+
+    # Conflict detection — cap conviction when bulls and bears are roughly split
+    bull_votes = sum(1 for s in signals if s[2] > 0)
+    bear_votes = sum(1 for s in signals if s[2] < 0)
+    mixed = abs(bull_votes - bear_votes) <= 1 and (bull_votes + bear_votes) >= 4
+    conflict_note = " ⚠️ MIXED SIGNALS" if mixed else ""
 
     if ratio > 0.2:
         direction = "CALL"
@@ -467,13 +488,16 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         direction = "NO TRADE"
 
     # VIX sweet-spot check
-    vix      = tech.get("vix", 20)
-    vix_ok   = 15 <= vix <= 28 if isinstance(vix, float) else True
-    vix_pen  = 0 if vix_ok else -1.5
+    vix_ok  = 15 <= vix <= 28 if isinstance(vix, (int, float)) else True
+    vix_pen = 0 if vix_ok else -1.5
 
     conviction = round(min(abs(ratio) * 5 + cat_score + vix_pen, 10), 1)
     conviction = max(conviction, 0)
-    go_nogo    = "GO" if conviction >= 5 and direction != "NO TRADE" else "NO TRADE"
+    if mixed:
+        conviction = min(conviction, 6)  # cap at 6 on mixed signals
+    go_nogo = "GO" if conviction >= 5 and direction != "NO TRADE" else "NO TRADE"
+    if conflict_note:
+        go_nogo = go_nogo + conflict_note
 
     return direction, conviction, go_nogo, signals
 
