@@ -32,8 +32,8 @@ SEND_EMAIL         = "--email" in sys.argv
 MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "TSLA"]
 
 # Tickers to scan — only those with today's 0DTE expiry will be included
-SCAN_TICKERS = ["SPY", "QQQ", "IWM", "NVDA", "AAPL", "TSLA", "META",
-                "AMZN", "MSFT", "GOOGL", "AMD", "MU", "NFLX", "COIN"]
+SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "COIN"]
+# Removed (Fable backtest: <30% win rate on GO trades): SPY, QQQ, IWM, AAPL, GOOGL, MSFT
 
 SECTORS = {
     "Tech":       "XLK",
@@ -395,109 +395,129 @@ def scan_ticker(ticker, market_tech, cross, sectors, cat_score):
     }
 
 # ── 8. SCORE + RECOMMEND ──────────────────────────────────────────────────
+import math as _math
+
+# ── Signal weight tuning (Fable-optimized, Nov 2026 backtest) ────────────────
+_GO_THRESHOLD_CALL    = 6.0   # min conviction for CALL → GO
+_GO_THRESHOLD_PUT     = 7.0   # PUTs must clear higher bar (31.5% vs 40.9% win)
+_MIN_STRENGTH         = 0.25  # min signal strength to assign a direction
+_MIN_ACTIVE_SIGNALS   = 3     # min non-neutral signals to assign a direction
+_MIXED_MINORITY_SHARE = 0.25  # dissenting weight share that flags mixed
+_MIXED_CONVICTION_CAP = 5.0   # below both GO thresholds → mixed blocks trade
+_VIX_MIN, _VIX_MAX   = 15.0, 28.0
+_CAT_BASELINE         = 2.0
+_CAT_SLOPE            = 0.75
+_TECH_LABELS = ("S&P Futures", "Pre-Market Move", "RSI (14)", "BB %B")
+
 def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net=0):
     signals = []  # (label, display_value, vote [-1/0/1], weight)
 
     if "futures_pct" in tech:
         fp   = tech["futures_pct"]
         vote = 1 if fp > 0.1 else (-1 if fp < -0.1 else 0)
-        signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 2))
+        signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 1.0))
 
-    # Support both SPY-specific keys (single-ticker mode) and generic tk_* keys
     premkt = tech.get("tk_premkt", tech.get("spy_premkt"))
     if premkt is not None:
         vote = 1 if premkt > 0.1 else (-1 if premkt < -0.1 else 0)
-        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, 2))
+        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, 1.0))
 
-    if "vix_chg" in tech:
+    if "vix_chg" in tech:                            # 57.4% accuracy — highest
         vc   = tech["vix_chg"]
         vote = 1 if vc < -0.5 else (-1 if vc > 0.5 else 0)
-        signals.append(("VIX Direction", f"{vc:+.2f}", vote, 1))
+        signals.append(("VIX Direction", f"{vc:+.2f}", vote, 2.0))
 
-    if "10Y Yield" in cross:
+    if "10Y Yield" in cross:                         # 54.9%
         yp   = cross["10Y Yield"]["pct"]
         vote = -1 if yp > 0.5 else (1 if yp < -0.5 else 0)
-        signals.append(("10Y Yield", f"{yp:+.2f}%", vote, 1))
+        signals.append(("10Y Yield", f"{yp:+.2f}%", vote, 1.25))
 
-    if "DXY" in cross:
+    if "DXY" in cross:                               # 56.4%
         dp   = cross["DXY"]["pct"]
         vote = -1 if dp > 0.3 else (1 if dp < -0.3 else 0)
-        signals.append(("DXY", f"{dp:+.2f}%", vote, 1))
+        signals.append(("DXY", f"{dp:+.2f}%", vote, 1.75))
 
-    sent_vote = 1 if sentiment == "BULLISH" else (-1 if sentiment == "BEARISH" else 0)
-    signals.append(("News Sentiment", sentiment, sent_vote, 1))
+    if sentiment is not None:                        # unvalidated — low weight
+        sent_vote = 1 if sentiment == "BULLISH" else (-1 if sentiment == "BEARISH" else 0)
+        signals.append(("News Sentiment", sentiment, sent_vote, 0.5))
 
-    if sectors:
+    if sectors:                                      # 56.5%
         pos = sum(1 for v in sectors.values() if v > 0)
         neg = sum(1 for v in sectors.values() if v < 0)
         sec_vote = 1 if pos > neg else (-1 if neg > pos else 0)
-        signals.append(("Sector Pulse", f"{pos} up / {neg} dn", sec_vote, 1))
+        signals.append(("Sector Pulse", f"{pos} up / {neg} dn", sec_vote, 1.75))
 
     rsi = tech.get("tk_rsi", tech.get("spy_rsi"))
     if rsi is not None:
         vote = 1 if rsi < 45 else (-1 if rsi > 60 else 0)
-        signals.append(("RSI (14)", str(rsi), vote, 1))
+        signals.append(("RSI (14)", str(rsi), vote, 0.5))
 
     pctb = tech.get("tk_pctb", tech.get("spy_pctb"))
     if pctb is not None:
         vote = -1 if pctb > 0.8 else (1 if pctb < 0.2 else 0)
-        signals.append(("BB %B", str(pctb), vote, 1))
+        signals.append(("BB %B", str(pctb), vote, 0.5))
 
     if analyst_net != 0:
         a_vote = 1 if analyst_net > 0 else -1
-        signals.append(("Analyst Ratings", f"{analyst_net:+d} net (7d)", a_vote, 0.5))
+        signals.append(("Analyst Ratings", f"{analyst_net:+d} net (7d)", a_vote, 0.25))
 
-    # Dynamic weights based on VIX regime
+    # ── VIX regime: hard gate (replaces old -1.5 penalty) ───────────────────
     vix = tech.get("vix", 20)
-    if isinstance(vix, (int, float)):
-        if vix < 15:        # low vol — momentum signals matter more
-            w_tech, w_sent = 1.5, 0.75
-        elif vix > 28:      # high vol — price action outweighs sentiment
-            w_tech, w_sent = 2.0, 0.5
-        else:               # normal — equal weighting
-            w_tech, w_sent = 1.0, 1.0
+    vix_is_num = isinstance(vix, (int, float))
+    if vix_is_num and vix < _VIX_MIN:
+        regime = "LOW"
+    elif vix_is_num and vix > _VIX_MAX:
+        regime = "HIGH"
     else:
-        w_tech, w_sent = 1.0, 1.0
+        regime = "NORMAL"
+    vix_ok = regime == "NORMAL"
 
-    # Apply regime weights: scale technicals (futures, premkt, RSI, BB) and sentiment
+    # regime multipliers kept at 1.0 — zero out-of-regime trades in backtest
     weighted_signals = []
     for label, val, vote, base_w in signals:
-        if label in ("S&P Futures", "Pre-Market Move", "RSI (14)", "BB %B"):
-            weighted_signals.append((label, val, vote, base_w * w_tech))
-        elif label == "News Sentiment":
-            weighted_signals.append((label, val, vote, base_w * w_sent))
-        else:
-            weighted_signals.append((label, val, vote, base_w))
+        weighted_signals.append((label, val, vote, base_w))
     signals = weighted_signals
 
+    # ── Scoring ──────────────────────────────────────────────────────────────
     total_w  = sum(s[3] for s in signals) or 1
-    weighted = sum(s[2] * s[3] for s in signals)
-    ratio    = weighted / total_w
+    bull_w   = sum(s[3] for s in signals if s[2] > 0)
+    bear_w   = sum(s[3] for s in signals if s[2] < 0)
+    active_w = bull_w + bear_w
+    active_n = sum(1 for s in signals if s[2] != 0)
+    net      = bull_w - bear_w
 
-    # Conflict detection — cap conviction when bulls and bears are roughly split
-    bull_votes = sum(1 for s in signals if s[2] > 0)
-    bear_votes = sum(1 for s in signals if s[2] < 0)
-    mixed = abs(bull_votes - bear_votes) <= 1 and (bull_votes + bear_votes) >= 4
-    conflict_note = " ⚠️ MIXED SIGNALS" if mixed else ""
+    agreement     = abs(net) / active_w if active_w else 0.0
+    participation = active_w / total_w
+    strength      = agreement * _math.sqrt(participation)
 
-    if ratio > 0.2:
-        direction = "CALL"
-    elif ratio < -0.2:
-        direction = "PUT"
+    if active_n >= _MIN_ACTIVE_SIGNALS and strength >= _MIN_STRENGTH:
+        direction = "CALL" if net > 0 else "PUT"
     else:
         direction = "NO TRADE"
 
-    # VIX sweet-spot check
-    vix_ok  = 15 <= vix <= 28 if isinstance(vix, (int, float)) else True
-    vix_pen = 0 if vix_ok else -1.5
+    # Weight-based conflict detection
+    minority_share = min(bull_w, bear_w) / active_w if active_w else 0.0
+    mixed = active_n >= _MIN_ACTIVE_SIGNALS and minority_share >= _MIXED_MINORITY_SHARE
+    conflict_note = " ⚠️ MIXED SIGNALS" if mixed else ""
 
-    conviction = round(min(abs(ratio) * 5 + cat_score + vix_pen, 10), 1)
-    conviction = max(conviction, 0)
+    # Catalyst adjustment — bounded so it nudges but can't manufacture a GO
+    cat = cat_score if isinstance(cat_score, (int, float)) else _CAT_BASELINE
+    cat_adj = max(-1.0, min((cat - _CAT_BASELINE) * _CAT_SLOPE, 1.5))
+
+    conviction = max(0.0, min(10.0 * strength + cat_adj, 10.0))
     if mixed:
-        conviction = min(conviction, 6)  # cap at 6 on mixed signals
-    go_nogo = "GO" if conviction >= 5 and direction != "NO TRADE" else "NO TRADE"
-    if conflict_note:
-        go_nogo = go_nogo + conflict_note
+        conviction = min(conviction, _MIXED_CONVICTION_CAP)
+    conviction = round(conviction, 1)
+
+    # ── GO / NO TRADE ────────────────────────────────────────────────────────
+    go_threshold = _GO_THRESHOLD_PUT if direction == "PUT" else _GO_THRESHOLD_CALL
+    is_go = direction != "NO TRADE" and vix_ok and conviction >= go_threshold
+
+    go_nogo = "GO" if is_go else "NO TRADE"
+    if mixed:
+        go_nogo += " ⚠️ MIXED SIGNALS"
+    if not vix_ok:
+        go_nogo += f" ⚠️ VIX {regime} REGIME BLOCK"
 
     return direction, conviction, go_nogo, signals
 
