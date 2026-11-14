@@ -564,7 +564,43 @@ def format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
                     f'★ <strong>Recommended Entry:</strong> '
                     f'${best["strike"]:.0f} {direction} @ limit '
                     f'<strong>${mid:.2f}</strong> (~${cost:.0f} per contract)</div>')
+        stop_price = round(mid * 0.50, 2)
+        stop_cost  = round(stop_price * 100, 2)
+        quick_entry_html = f"""
+  <div style="margin:0;padding:16px 28px 20px;background:#fffbe6;border-top:3px solid #e6a800;">
+    <div style="font-size:13px;font-weight:bold;color:#7a5500;text-transform:uppercase;
+      letter-spacing:1px;border-bottom:2px solid #e6a800;padding-bottom:6px;margin-bottom:14px;">
+      &#x1F4CB; Fidelity ATP Quick Entry
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr style="background:#fff3cc;">
+        <td style="padding:7px 10px;font-weight:bold;color:#555;width:40%;">Field</td>
+        <td style="padding:7px 10px;font-weight:bold;color:#555;">Value</td>
+      </tr>
+      <tr><td style="padding:6px 10px;color:#555;">Symbol</td>
+          <td style="padding:6px 10px;font-weight:bold;">SPY</td></tr>
+      <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Action</td>
+          <td style="padding:6px 10px;font-weight:bold;">BUY TO OPEN</td></tr>
+      <tr><td style="padding:6px 10px;color:#555;">Option Type</td>
+          <td style="padding:6px 10px;font-weight:bold;">{direction}</td></tr>
+      <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Strike</td>
+          <td style="padding:6px 10px;font-weight:bold;">${best["strike"]:.0f}</td></tr>
+      <tr><td style="padding:6px 10px;color:#555;">Expiration</td>
+          <td style="padding:6px 10px;font-weight:bold;">{exp_date or "Today"} &nbsp;<span style="color:#888;font-weight:normal;">(0DTE)</span></td></tr>
+      <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Order Type</td>
+          <td style="padding:6px 10px;font-weight:bold;">Limit</td></tr>
+      <tr><td style="padding:6px 10px;color:#555;">Limit Price</td>
+          <td style="padding:6px 10px;font-weight:bold;">${mid:.2f} &nbsp;<span style="color:#888;font-weight:normal;">(mid of ${best.get("bid",0):.2f} / ${best.get("ask",0):.2f})</span></td></tr>
+      <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Cost / Contract</td>
+          <td style="padding:6px 10px;font-weight:bold;">~${cost:.0f}</td></tr>
+      <tr><td style="padding:6px 10px;color:#555;">Suggested Stop</td>
+          <td style="padding:6px 10px;font-weight:bold;">${stop_price:.2f} &nbsp;<span style="color:#888;font-weight:normal;">(50% of premium, ~${stop_cost:.0f} loss/contract)</span></td></tr>
+      <tr style="background:#fff8e6;"><td style="padding:6px 10px;color:#555;">Time in Force</td>
+          <td style="padding:6px 10px;font-weight:bold;">Day</td></tr>
+    </table>
+  </div>"""
     else:
+        quick_entry_html = ""
         chain_rows = ('<tr><td colspan="8" style="padding:8px 10px;color:#888;">'
                       'Chain unavailable — market may not be open yet</td></tr>')
 
@@ -605,6 +641,8 @@ def format_html(tech, cross, sectors, catalysts, sentiment, sent_net,
     <div style="color:rgba(255,255,255,0.75);font-size:13px;margin-top:4px;">
       Conviction: {conviction}/10</div>
   </div>
+
+  {quick_entry_html}
 
   <div style="padding:20px 28px 8px;">
     {_sec("Today's Catalysts")}
