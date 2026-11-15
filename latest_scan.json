@@ -1,0 +1,144 @@
+{
+  "generated_at": "2026-11-15T03:57:48",
+  "go_count": 0,
+  "market": {
+    "vix": 19.3,
+    "vix_chg": 0.6,
+    "futures_pct": -0.42,
+    "futures_price": 7583.0,
+    "spy_price": 749.6,
+    "spy_premkt": -0.99,
+    "spy_rsi": 45.2
+  },
+  "cross": {
+    "10Y Yield": {
+      "price": 5.15,
+      "pct": 1.0
+    },
+    "DXY": {
+      "price": 103.41,
+      "pct": 0.23
+    },
+    "Oil (WTI)": {
+      "price": 88.56,
+      "pct": -0.2
+    },
+    "Gold": {
+      "price": 3886.3,
+      "pct": 0.03
+    }
+  },
+  "sectors": {
+    "Tech": -2.01,
+    "Financials": 0.81,
+    "Energy": 0.98,
+    "Healthcare": 0.54,
+    "Comms": 1.05,
+    "Industrials": -0.39
+  },
+  "catalysts": [
+    "GDP release",
+    "PPI data"
+  ],
+  "go_signals": [],
+  "all_results": [
+    {
+      "ticker": "NVDA",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "TSLA",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "META",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "AMZN",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "MU",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "NFLX",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "MSTR",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "HOOD",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "QQQ",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "PLTR",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "CRWD",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "ARM",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "COIN",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "SMCI",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    }
+  ]
+}
