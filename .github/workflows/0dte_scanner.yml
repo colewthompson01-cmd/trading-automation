@@ -1,0 +1,36 @@
+name: 0DTE Scanner
+
+on:
+  schedule:
+    - cron: '0 16 * * 1-5'   # 10:00 AM CST (UTC-6) Mon-Fri
+  workflow_dispatch:            # manual trigger button on GitHub
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            yfinance pandas numpy \
+            vaderSentiment \
+            alpaca-py \
+            pyarrow
+
+      - name: Run scanner
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALPACA_API_KEY:     ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:  ${{ secrets.ALPACA_SECRET_KEY }}
+        run: python3 0dte_scanner.py --email
