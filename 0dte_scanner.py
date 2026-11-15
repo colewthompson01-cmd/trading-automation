@@ -1383,6 +1383,85 @@ def format_multi_html(results, market_tech, cross, sectors):
   </div>
 </div></body></html>"""
 
+# ── JSON SNAPSHOT ─────────────────────────────────────────────────────────
+def write_json_snapshot(results, market_tech, cross, sectors, catalysts):
+    import json
+    go_results = [r for r in results if r.get("has_0dte") and "GO" in r.get("go_nogo", "")]
+    go_results.sort(key=lambda r: r["conviction"], reverse=True)
+
+    go_signals = []
+    for r in go_results:
+        chain    = r.get("chain", [])
+        best_rec = None
+        if chain:
+            best = chain[0]
+            mid  = round((best.get("bid", 0) + best.get("ask", 0)) / 2, 2)
+            cost = round(mid * 100, 2)
+            best_rec = {
+                "strike":            best["strike"],
+                "direction":         r["direction"],
+                "limit":             mid,
+                "cost_per_contract": cost,
+                "stop":              round(mid * 0.50, 2),
+                "target_50":         round(mid * 1.50, 2),
+                "target_100":        round(mid * 2.00, 2),
+            }
+        tech = r.get("tech", {})
+        go_signals.append({
+            "ticker":     r["ticker"],
+            "direction":  r["direction"],
+            "conviction": r["conviction"],
+            "go_nogo":    r["go_nogo"],
+            "price":      tech.get("tk_price", tech.get("spy_price", 0)),
+            "premkt":     tech.get("tk_premkt", tech.get("spy_premkt", 0)),
+            "exp_date":   r.get("exp_date"),
+            "signals":    [{"label": s[0], "value": s[1], "vote": s[2]} for s in r.get("signals", [])],
+            "chain":      [{
+                "strike":        row["strike"],
+                "lastPrice":     row.get("lastPrice", 0),
+                "bid":           row.get("bid", 0),
+                "ask":           row.get("ask", 0),
+                "volume":        int(row.get("volume", 0) or 0),
+                "openInterest":  int(row.get("openInterest", 0) or 0),
+                "iv":            round(row.get("impliedVolatility", 0) * 100, 1) if row.get("impliedVolatility") else None,
+            } for row in chain],
+            "recommended": best_rec,
+        })
+
+    snapshot = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "go_count":     len(go_signals),
+        "market": {
+            "vix":           market_tech.get("vix"),
+            "vix_chg":       market_tech.get("vix_chg", 0),
+            "futures_pct":   market_tech.get("futures_pct", 0),
+            "futures_price": market_tech.get("futures_price"),
+            "spy_price":     market_tech.get("spy_price"),
+            "spy_premkt":    market_tech.get("spy_premkt", 0),
+            "spy_rsi":       market_tech.get("spy_rsi"),
+        },
+        "cross":       cross,
+        "sectors":     sectors,
+        "catalysts":   catalysts,
+        "go_signals":  go_signals,
+        "all_results": [
+            {
+                "ticker":     r["ticker"],
+                "direction":  r.get("direction", "—"),
+                "conviction": r.get("conviction", 0),
+                "go_nogo":    r.get("go_nogo", "—"),
+                "has_0dte":   r.get("has_0dte", False),
+            }
+            for r in results
+        ],
+    }
+
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_scan.json")
+    with open(out, "w") as f:
+        json.dump(snapshot, f, indent=2, default=str)
+    print(f"  Wrote latest_scan.json ({len(go_signals)} GO signals)")
+
+
 # ── SEND EMAIL ────────────────────────────────────────────────────────────
 def send_email(subject, html_body):
     if not GMAIL_APP_PASSWORD:
@@ -1425,6 +1504,8 @@ def main():
     print(f"\n  {len(go_results)} GO signal(s) found")
     for r in go_results:
         print(f"  ★  {r['ticker']:6s} {r['direction']:4s}  Conviction {r['conviction']}/10")
+
+    write_json_snapshot(results, market_tech, cross, sectors, catalysts)
 
     if SEND_EMAIL:
         html = format_multi_html(results, market_tech, cross, sectors)

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="0DTE">
+<title>0DTE Scanner</title>
+<style>
+:root {
+  --bg:       #0d0f14;
+  --surface:  #161920;
+  --card:     #1c2030;
+  --border:   #2a2f3f;
+  --text:     #e8eaf0;
+  --muted:    #7a8099;
+  --call:     #1a7a1a;
+  --call-lt:  #22c55e;
+  --put:      #7a1a1a;
+  --put-lt:   #ef4444;
+  --blue:     #1F4E79;
+  --blue-lt:  #60a5fa;
+  --gold:     #e6a800;
+  --radius:   12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── HEADER ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 16px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.header-left h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+.header-left .run-time { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stale-badge {
+  font-size: 11px;
+  background: #3a2800;
+  color: var(--gold);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 8px;
+}
+.settings-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* ── MARKET STRIP ── */
+.market-strip {
+  display: flex;
+  overflow-x: auto;
+  gap: 2px;
+  padding: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+.market-strip::-webkit-scrollbar { display: none; }
+.mkt-cell {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  text-align: center;
+  min-width: 80px;
+}
+.mkt-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.mkt-val   { font-size: 15px; font-weight: 700; margin: 2px 0; }
+.mkt-sub   { font-size: 11px; color: var(--muted); }
+.up   { color: var(--call-lt); }
+.down { color: var(--put-lt); }
+.neutral { color: var(--muted); }
+
+/* ── MAIN CONTENT ── */
+.content { padding: 12px 12px 100px; }
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 16px 4px 8px;
+}
+
+/* ── TRADE CARD ── */
+.trade-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+}
+.card-header.call { background: var(--call); }
+.card-header.put  { background: var(--put);  }
+.card-ticker { font-size: 22px; font-weight: 800; }
+.card-dir    { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+.conviction-badge {
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 6px 12px;
+  text-align: center;
+}
+.conviction-num  { font-size: 22px; font-weight: 800; }
+.conviction-denom{ font-size: 12px; opacity: 0.75; }
+.conviction-label{ font-size: 10px; opacity: 0.75; text-transform: uppercase; }
+
+/* ── ORDER BOX ── */
+.order-box {
+  background: #1a1500;
+  border-top: 2px solid var(--gold);
+  padding: 12px 16px;
+}
+.order-title {
+  font-size: 11px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+.order-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.order-field { }
+.order-field-label { font-size: 11px; color: var(--muted); }
+.order-field-val   { font-size: 14px; font-weight: 700; margin-top: 1px; }
+.order-field-val.highlight { color: var(--gold); font-size: 16px; }
+
+.oco-box {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #3a3000;
+}
+.oco-title {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.oco-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid #2a2200;
+  font-size: 13px;
+}
+.oco-row:last-child { border-bottom: none; }
+.oco-label { }
+.oco-price { font-weight: 700; }
+.oco-pnl   { font-size: 12px; }
+.oco-pnl.profit { color: var(--call-lt); }
+.oco-pnl.loss   { color: var(--put-lt); }
+
+/* ── SIGNALS ── */
+.signals-section { padding: 10px 16px 4px; }
+.signals-title {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.signal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.signal-row:last-child { border-bottom: none; }
+.signal-label { color: var(--muted); flex: 1; }
+.signal-val   { flex: 1; text-align: center; }
+.signal-vote  { font-size: 12px; font-weight: 700; min-width: 60px; text-align: right; }
+
+/* ── CHAIN TABLE ── */
+.chain-section { padding: 8px 16px 14px; }
+.chain-title {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.chain-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.chain-table th {
+  color: var(--muted);
+  font-weight: 600;
+  text-align: right;
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.chain-table th:first-child { text-align: left; }
+.chain-table td {
+  padding: 5px 4px;
+  text-align: right;
+  border-bottom: 1px solid #1e2130;
+}
+.chain-table td:first-child { text-align: left; font-weight: 700; color: var(--blue-lt); }
+.chain-table tr:last-child td { border-bottom: none; }
+
+/* ── NO GO ── */
+.no-go-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.no-go-card .icon { font-size: 36px; margin-bottom: 8px; }
+.no-go-card h2    { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.no-go-card p     { font-size: 13px; color: var(--muted); }
+
+/* ── ALL RESULTS TABLE ── */
+.results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.results-table th {
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.results-table td { padding: 7px 8px; border-bottom: 1px solid #1a1e2a; }
+.results-table tr:last-child td { border-bottom: none; }
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.tag.call { background: rgba(34,197,94,0.15); color: var(--call-lt); }
+.tag.put  { background: rgba(239,68,68,0.15);  color: var(--put-lt); }
+.tag.none { background: rgba(122,128,153,0.15); color: var(--muted); }
+
+/* ── RUN BUTTON ── */
+.run-btn-wrap {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--bg) 30%);
+}
+.run-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+  background: var(--blue);
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: opacity 0.15s;
+}
+.run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.run-btn .spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: none;
+}
+.run-btn.loading .spinner { display: block; }
+.run-btn.loading .run-label { opacity: 0.7; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: none;
+  align-items: flex-end;
+  z-index: 100;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  width: 100%;
+  border-top: 1px solid var(--border);
+}
+.modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.modal p  { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+.modal input {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  margin-bottom: 12px;
+  font-family: monospace;
+}
+.modal-btns { display: flex; gap: 10px; }
+.btn-primary {
+  flex: 1;
+  padding: 13px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-secondary {
+  flex: 0 0 auto;
+  padding: 13px 16px;
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.toast {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1c2a1c;
+  color: var(--call-lt);
+  border: 1px solid var(--call);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.error { background: #2a1c1c; color: var(--put-lt); border-color: var(--put); }
+.toast.show  { opacity: 1; }
+
+/* ── LOADING STATE ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 8px;
+  height: 120px;
+  margin-bottom: 12px;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <h1>0DTE Scanner</h1>
+    <div class="run-time" id="run-time">Loading…</div>
+  </div>
+  <button class="settings-btn" onclick="openSettings()">⚙ Setup</button>
+</div>
+
+<!-- Market Strip -->
+<div class="market-strip" id="market-strip"></div>
+
+<!-- Content -->
+<div class="content" id="content">
+  <div class="skeleton"></div>
+  <div class="skeleton" style="height:80px;"></div>
+</div>
+
+<!-- Run button -->
+<div class="run-btn-wrap">
+  <button class="run-btn" id="run-btn" onclick="runScanner()">
+    <div class="spinner"></div>
+    <span class="run-label">▶ RUN SCANNER NOW</span>
+  </button>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settings-modal" onclick="closeSettings(event)">
+  <div class="modal">
+    <h2>GitHub Token Setup</h2>
+    <p>Paste a GitHub Personal Access Token with <strong>workflow</strong> scope to enable the Run button. The token is stored only on this device.</p>
+    <input type="password" id="pat-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" autocorrect="off">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      Get one at github.com → Settings → Developer settings → Personal access tokens → Fine-grained → repo + workflow scopes
+    </div>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
+      <button class="btn-primary" onclick="savePAT()">Save Token</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const REPO     = 'colewthompson01-cmd/trading-automation';
+const WORKFLOW = '0dte_scanner.yml';
+const RAW_URL  = `https://raw.githubusercontent.com/${REPO}/main/latest_scan.json`;
+const API_URL  = `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`;
+
+// ── Token management ──────────────────────────────────────────────────────
+function getPAT()       { try { return localStorage.getItem('gh_pat') || ''; } catch { return ''; } }
+function setPATStore(v) { try { localStorage.setItem('gh_pat', v); } catch {} }
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isErr ? ' error' : '') + ' show';
+  setTimeout(() => el.className = 'toast', 2800);
+}
+
+// ── Settings modal ────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('pat-input').value = getPAT();
+  document.getElementById('settings-modal').classList.add('open');
+}
+function closeSettings(e) {
+  if (!e || e.target.id === 'settings-modal') {
+    document.getElementById('settings-modal').classList.remove('open');
+  }
+}
+function savePAT() {
+  const v = document.getElementById('pat-input').value.trim();
+  if (!v) return;
+  setPATStore(v);
+  closeSettings();
+  toast('Token saved');
+}
+
+// ── Run scanner ───────────────────────────────────────────────────────────
+async function runScanner() {
+  const pat = getPAT();
+  if (!pat) { openSettings(); return; }
+
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${pat}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ ref: 'main' }),
+    });
+    if (res.ok || res.status === 204) {
+      toast('Scanner started — email + results in ~3 min');
+      setTimeout(() => loadAndRender(), 200000); // auto-refresh after 3.5 min
+    } else {
+      const j = await res.json().catch(() => ({}));
+      toast((j.message || `Error ${res.status}`) + ' — check token scope', true);
+    }
+  } catch (e) {
+    toast('Network error — are you online?', true);
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function fmt(n, dec=2) { return n != null ? Number(n).toFixed(dec) : '—'; }
+function pctClass(v)   { return v > 0 ? 'up' : v < 0 ? 'down' : 'neutral'; }
+function pctArrow(v)   { return v > 0 ? '▲' : v < 0 ? '▼' : '—'; }
+function timeAgo(iso) {
+  const diff = (Date.now() - new Date(iso)) / 60000;
+  if (diff < 2)   return 'Just now';
+  if (diff < 60)  return `${Math.floor(diff)}m ago`;
+  if (diff < 1440)return `${Math.floor(diff/60)}h ago`;
+  return `${Math.floor(diff/1440)}d ago`;
+}
+function isStale(iso) { return (Date.now() - new Date(iso)) / 3600000 > 4; }
+
+// ── Render market strip ───────────────────────────────────────────────────
+function renderMarket(d) {
+  const m = d.market || {};
+  const cells = [
+    { label:'VIX',      val: fmt(m.vix,1),         sub: `${m.vix_chg>=0?'+':''}${fmt(m.vix_chg,2)} chg`, cls: m.vix_chg>0.5?'down':m.vix_chg<-0.5?'up':'neutral' },
+    { label:'ES Fut',   val: `${m.futures_pct>=0?'+':''}${fmt(m.futures_pct)}%`, sub: fmt(m.futures_price,0), cls: pctClass(m.futures_pct) },
+    { label:'SPY',      val: `$${fmt(m.spy_price,2)}`, sub: `${m.spy_premkt>=0?'+':''}${fmt(m.spy_premkt)}% pm`, cls: pctClass(m.spy_premkt) },
+    { label:'RSI',      val: fmt(m.spy_rsi,1),         sub: 'SPY 14d', cls: 'neutral' },
+  ];
+  const sectors = d.sectors || {};
+  for (const [k,v] of Object.entries(sectors).slice(0,4)) {
+    cells.push({ label: k, val: `${v>=0?'+':''}${fmt(v)}%`, sub: 'sector', cls: pctClass(v) });
+  }
+  document.getElementById('market-strip').innerHTML =
+    cells.map(c => `<div class="mkt-cell">
+      <div class="mkt-label">${c.label}</div>
+      <div class="mkt-val ${c.cls}">${c.val}</div>
+      <div class="mkt-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+// ── Render trade card ─────────────────────────────────────────────────────
+function renderCard(r) {
+  const dir  = r.direction;
+  const cls  = dir === 'CALL' ? 'call' : 'put';
+  const rec  = r.recommended;
+
+  // Order box
+  let orderHtml = '';
+  if (rec) {
+    orderHtml = `
+    <div class="order-box">
+      <div class="order-title">📋 Fidelity ATP Quick Entry</div>
+      <div class="order-grid">
+        <div class="order-field">
+          <div class="order-field-label">Symbol</div>
+          <div class="order-field-val">${r.ticker}</div>
+        </div>
+        <div class="order-field">
+          <div class="order-field-label">Action</div>
+          <div class="order-field-val">BUY TO OPEN</div>
+        </div>
+        <div class="order-field">
+          <div class="order-field-label">Type / Strike</div>
+          <div class="order-field-val">${dir} $${fmt(rec.strike,0)}</div>
+        </div>
+        <div class="order-field">
+          <div class="order-field-label">Expiration</div>
+          <div class="order-field-val">${r.exp_date || 'Today'} (0DTE)</div>
+        </div>
+        <div class="order-field">
+          <div class="order-field-label">Order Type</div>
+          <div class="order-field-val">Limit · Day</div>
+        </div>
+        <div class="order-field">
+          <div class="order-field-label">Limit Price / Cost</div>
+          <div class="order-field-val highlight">$${fmt(rec.limit)} (~$${rec.cost_per_contract}/ct)</div>
+        </div>
+      </div>
+      <div class="oco-box">
+        <div class="oco-title">🔄 OCO Bracket (after fill)</div>
+        <div class="oco-row">
+          <span class="oco-label">🎯 Sell Limit +100%</span>
+          <span class="oco-price">$${fmt(rec.target_100)}</span>
+          <span class="oco-pnl profit">+$${Math.round(rec.cost_per_contract)}</span>
+        </div>
+        <div class="oco-row">
+          <span class="oco-label">🎯 Sell Limit +50%</span>
+          <span class="oco-price">$${fmt(rec.target_50)}</span>
+          <span class="oco-pnl profit">+$${Math.round(rec.cost_per_contract*0.5)}</span>
+        </div>
+        <div class="oco-row">
+          <span class="oco-label">🛑 Stop Market −50%</span>
+          <span class="oco-price">$${fmt(rec.stop)}</span>
+          <span class="oco-pnl loss">−$${Math.round(rec.cost_per_contract*0.5)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Signals (top 8)
+  const sigHtml = r.signals.slice(0, 8).map(s => {
+    const vc  = s.vote > 0 ? 'up' : s.vote < 0 ? 'down' : 'neutral';
+    const lbl = s.vote > 0 ? '▲ CALL' : s.vote < 0 ? '▼ PUT' : '— neut';
+    return `<div class="signal-row">
+      <span class="signal-label">${s.label}</span>
+      <span class="signal-val">${s.value}</span>
+      <span class="signal-vote ${vc}">${lbl}</span>
+    </div>`;
+  }).join('');
+
+  // Chain
+  const chainHtml = r.chain.length ? `
+  <div class="chain-section">
+    <div class="chain-title">0DTE Chain</div>
+    <table class="chain-table">
+      <tr><th>Strike</th><th>Bid</th><th>Ask</th><th>Vol</th><th>IV</th></tr>
+      ${r.chain.map((row,i) => `
+      <tr>
+        <td>${i===0?'★ ':''}$${fmt(row.strike,0)}</td>
+        <td>$${fmt(row.bid)}</td>
+        <td>$${fmt(row.ask)}</td>
+        <td>${(row.volume||0).toLocaleString()}</td>
+        <td>${row.iv != null ? row.iv+'%' : '—'}</td>
+      </tr>`).join('')}
+    </table>
+  </div>` : '';
+
+  return `
+  <div class="trade-card">
+    <div class="card-header ${cls}">
+      <div>
+        <div class="card-ticker">${r.ticker}</div>
+        <div class="card-dir">${dir} · $${fmt(r.price,2)} · Pre-mkt ${r.premkt>=0?'+':''}${fmt(r.premkt)}%</div>
+      </div>
+      <div class="conviction-badge">
+        <div class="conviction-num">${r.conviction}</div>
+        <div class="conviction-denom">/10</div>
+        <div class="conviction-label">conviction</div>
+      </div>
+    </div>
+    ${orderHtml}
+    <div class="signals-section">
+      <div class="signals-title">Signal Breakdown</div>
+      ${sigHtml}
+    </div>
+    ${chainHtml}
+  </div>`;
+}
+
+// ── Render all results table ──────────────────────────────────────────────
+function renderAllResults(results) {
+  const rows = results.filter(r => r.has_0dte).map(r => {
+    const isGo = r.go_nogo.startsWith('GO');
+    const dirTag = r.direction === 'CALL' ? `<span class="tag call">CALL</span>`
+                 : r.direction === 'PUT'  ? `<span class="tag put">PUT</span>`
+                 : `<span class="tag none">—</span>`;
+    const cv = isGo ? `<strong>${r.conviction}</strong>` : `<span style="color:var(--muted)">${r.conviction}</span>`;
+    return `<tr>
+      <td style="font-weight:700">${r.ticker}</td>
+      <td>${dirTag}</td>
+      <td>${cv}</td>
+      <td style="font-size:12px;color:var(--muted);">${r.go_nogo.replace(/^GO\s*/,'').replace(/⭐.*$/,'').replace(/⚠️/,'⚠').trim() || (isGo?'GO':'—')}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
+    <table class="results-table">
+      <tr><th>Ticker</th><th>Dir</th><th>Conv</th><th>Status</th></tr>
+      ${rows}
+    </table>
+  </div>`;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────
+function render(d) {
+  renderMarket(d);
+
+  // Run time
+  const ago  = timeAgo(d.generated_at);
+  const badge = isStale(d.generated_at)
+    ? `<span class="stale-badge">STALE</span>` : '';
+  document.getElementById('run-time').innerHTML =
+    `Last run: ${ago} · ${d.generated_at.slice(0,16).replace('T',' ')} CT${badge}`;
+
+  let html = '';
+
+  // GO signals
+  const gos = d.go_signals || [];
+  if (gos.length) {
+    html += `<div class="section-label">GO Signals (${gos.length})</div>`;
+    html += gos.map(renderCard).join('');
+  } else {
+    html += `
+    <div class="no-go-card">
+      <div class="icon">📊</div>
+      <h2>No GO Signals This Scan</h2>
+      <p>All signals below conviction threshold (7.0) or mixed direction. Check back at open or run a new scan.</p>
+    </div>`;
+  }
+
+  // Catalysts
+  if (d.catalysts && d.catalysts.length) {
+    html += `<div class="section-label">Today's Catalysts</div>`;
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;font-size:13px;line-height:1.9;">`;
+    html += d.catalysts.map(c => `• ${c}`).join('<br>');
+    html += '</div>';
+  }
+
+  // All results
+  if (d.all_results && d.all_results.length) {
+    html += `<div class="section-label">All Tickers</div>`;
+    html += renderAllResults(d.all_results);
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+// ── Load data ─────────────────────────────────────────────────────────────
+async function loadAndRender() {
+  try {
+    const res  = await fetch(`${RAW_URL}?t=${Date.now()}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    render(data);
+  } catch (e) {
+    document.getElementById('run-time').textContent = 'No scan data yet';
+    document.getElementById('content').innerHTML = `
+    <div class="no-go-card">
+      <div class="icon">🔧</div>
+      <h2>No Scan Data Yet</h2>
+      <p>Run the scanner once to populate results. Make sure GitHub Pages is enabled in your repo settings.</p>
+    </div>`;
+  }
+}
+
+loadAndRender();
+</script>
+</body>
+</html>
