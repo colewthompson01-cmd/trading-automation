@@ -32,8 +32,10 @@ SEND_EMAIL         = "--email" in sys.argv
 MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "TSLA"]
 
 # Tickers to scan — only those with today's 0DTE expiry will be included
-SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "MSTR", "HOOD"]
-# Removed (<45% win rate at conviction >=7): SPY, QQQ, IWM, AAPL, GOOGL, MSFT, COIN
+SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "MU", "NFLX", "MSTR", "HOOD",
+                "QQQ", "PLTR", "CRWD", "ARM", "COIN", "SMCI"]
+# Removed (sub-50% under super-filter): AMD 33%, GOOGL 33%, PANW 43%
+# Removed (low sample / poor historical): SPY, IWM, AAPL, MSFT
 
 SECTORS = {
     "Tech":       "XLK",
@@ -409,22 +411,33 @@ def get_ticker_technicals(ticker, market_tech):
         except Exception:
             pass
 
-        # VWAP at 10 AM CT via Alpaca minute bars (optional — needs ALPACA_API_KEY)
+        # Intraday signals via Alpaca minute bars (optional — needs ALPACA_API_KEY)
         try:
             if os.environ.get("ALPACA_API_KEY") and os.environ.get("ALPACA_SECRET_KEY"):
-                import importlib.util as _ilu, sys as _sys
+                import importlib.util as _ilu
                 _sp = os.path.join(os.path.dirname(__file__), "alpaca_data.py")
                 if os.path.exists(_sp):
                     _spec = _ilu.spec_from_file_location("alpaca_data", _sp)
                     _amod = _ilu.module_from_spec(_spec)
                     _spec.loader.exec_module(_amod)
-                    _bars = _amod.fetch_minute_bars(ticker, date.today(),
-                                                    date.today() + timedelta(days=1))
+                    # Fetch 25 days so RVOL has 20-session history
+                    _start = date.today() - timedelta(days=25)
+                    _bars  = _amod.fetch_minute_bars(ticker, _start,
+                                                     date.today() + timedelta(days=1))
                     if not _bars.empty:
-                        _sig = _amod.build_intraday_signals(ticker, _bars, date.today())
+                        _atr_val = result.get("gap_atr")
+                        # Pre-compute RVOL for all days in the 25-day window
+                        _rvol_lookup = _amod.precompute_rvol(_bars)
+                        _sig = _amod.build_intraday_signals(ticker, _bars, date.today(),
+                                                            atr14=_atr_val,
+                                                            rvol_lookup=_rvol_lookup)
                         if _sig:
                             result["entry_vs_vwap"] = _sig["entry_vs_vwap"]
                             result["or_range_pct"]  = _sig["or_range_pct"]
+                            result["orb_direction"] = _sig["orb_direction"]
+                            result["rvol"]          = _sig["rvol"]
+                            result["or_atr"]        = _sig["or_atr"]
+                            result["gap_sig"]       = _sig["gap_sig"]
         except Exception:
             pass
 
@@ -486,8 +499,24 @@ def get_0dte_chain(ticker, price, direction):
         return [], None
 
 # ── 7f. SCAN ONE TICKER ───────────────────────────────────────────────────
+def _check_fomc_day():
+    """Returns True if today appears to be an FOMC decision day (live only)."""
+    try:
+        text = " ".join(rss_fetch("FOMC meeting today fed decision", max_items=5)).lower()
+        return any(w in text for w in ["fomc meeting today", "rate decision today",
+                                       "fed announces", "fed raises", "fed cuts",
+                                       "federal open market committee"])
+    except Exception:
+        return False
+
+_FOMC_TODAY = None  # cached once per scanner run
+
 def scan_ticker(ticker, market_tech, cross, sectors, cat_score):
     """Run full signal analysis for one ticker. Returns result dict."""
+    global _FOMC_TODAY
+    if _FOMC_TODAY is None:
+        _FOMC_TODAY = _check_fomc_day()
+
     exp_date = check_0dte_expiry(ticker)
     if not exp_date:
         return {"ticker": ticker, "has_0dte": False}
@@ -495,7 +524,7 @@ def scan_ticker(ticker, market_tech, cross, sectors, cat_score):
     tech               = get_ticker_technicals(ticker, market_tech)
     sentiment, sent_net = get_ticker_news(ticker)
     direction, conviction, go_nogo, signals = build_recommendation(
-        tech, cross, sectors, sentiment, cat_score
+        tech, cross, sectors, sentiment, cat_score, fomc_day=_FOMC_TODAY
     )
     price = tech.get("tk_price", 0)
     chain, _ = get_0dte_chain(ticker, price, direction) if direction != "NO TRADE" else ([], None)
@@ -530,43 +559,46 @@ _CAT_BASELINE         = 2.0
 _CAT_SLOPE            = 0.75
 _TECH_LABELS = ("S&P Futures", "Pre-Market Move", "RSI (14)", "BB %B")
 
-def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net=0):
+def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net=0,
+                         fomc_day=False):
     signals = []  # (label, display_value, vote [-1/0/1], weight)
 
     if "futures_pct" in tech:
         fp   = tech["futures_pct"]
         vote = 1 if fp > 0.1 else (-1 if fp < -0.1 else 0)
-        signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 1.0))
+        signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 1.25))   # 55.9% → up from 1.0
 
     premkt = tech.get("tk_premkt", tech.get("spy_premkt"))
+    gap_filled = tech.get("gap_sig") == 0 and tech.get("gap_atr", 0) != 0  # stale if gap filled
     if premkt is not None:
         vote = 1 if premkt > 0.1 else (-1 if premkt < -0.1 else 0)
-        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, 1.0))
+        pm_w = 0.0 if gap_filled else 0.75   # zero out if gap already filled (Fable rec)
+        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, pm_w))
 
-    if "vix_chg" in tech:                            # 57.4% accuracy — highest
+    if "vix_chg" in tech:                            # 57.6% — highest
         vc   = tech["vix_chg"]
         vote = 1 if vc < -0.5 else (-1 if vc > 0.5 else 0)
         signals.append(("VIX Direction", f"{vc:+.2f}", vote, 2.0))
 
-    if "10Y Yield" in cross:                         # 54.9%
+    if "10Y Yield" in cross:                         # 57.8% — raised from 1.25
         yp   = cross["10Y Yield"]["pct"]
         vote = -1 if yp > 0.5 else (1 if yp < -0.5 else 0)
-        signals.append(("10Y Yield", f"{yp:+.2f}%", vote, 1.25))
+        signals.append(("10Y Yield", f"{yp:+.2f}%", vote, 1.75))
 
-    if "DXY" in cross:                               # 56.4%
+    if "DXY" in cross:                               # 52.4% — lowered from 1.75
         dp   = cross["DXY"]["pct"]
         vote = -1 if dp > 0.3 else (1 if dp < -0.3 else 0)
-        signals.append(("DXY", f"{dp:+.2f}%", vote, 1.75))
+        signals.append(("DXY", f"{dp:+.2f}%", vote, 1.0))
 
     if sentiment is not None:                        # unvalidated — low weight
         sent_vote = 1 if sentiment == "BULLISH" else (-1 if sentiment == "BEARISH" else 0)
         signals.append(("News Sentiment", sentiment, sent_vote, 0.5))
 
-    if sectors:                                      # 56.5%
+    if sectors:                                      # 54.4% — lowered from 1.75
         pos = sum(1 for v in sectors.values() if v > 0)
         neg = sum(1 for v in sectors.values() if v < 0)
         sec_vote = 1 if pos > neg else (-1 if neg > pos else 0)
-        signals.append(("Sector Pulse", f"{pos} up / {neg} dn", sec_vote, 1.75))
+        signals.append(("Sector Pulse", f"{pos} up / {neg} dn", sec_vote, 1.25))
 
     rsi = tech.get("tk_rsi", tech.get("spy_rsi"))
     if rsi is not None:
@@ -596,11 +628,34 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         pcr_vote = -1 if pcr > 1.1 else (1 if pcr < 0.75 else 0)
         signals.append(("Put/Call Ratio", f"{pcr:.2f}", pcr_vote, 0.75))
 
-    # VWAP position at 10 AM CT (from Alpaca minute bars when available)
+    # VWAP position at 10 AM CT (55.8% accuracy — raised from 1.0)
     entry_vs_vwap = tech.get("entry_vs_vwap")
+    rvol = tech.get("rvol")
     if entry_vs_vwap is not None:
         vwap_vote = 1 if entry_vs_vwap > 0.1 else (-1 if entry_vs_vwap < -0.1 else 0)
-        signals.append(("VWAP Position", f"{entry_vs_vwap:+.2f}% vs VWAP", vwap_vote, 1.0))
+        # Scale by RVOL: high volume = more conviction in VWAP signal
+        rvol_mult = 1.25 if (rvol and rvol >= 1.5) else (0.75 if (rvol and rvol < 0.5) else 1.0)
+        signals.append(("VWAP Position", f"{entry_vs_vwap:+.2f}% vs VWAP", vwap_vote,
+                        round(1.25 * rvol_mult, 2)))
+
+    # ORB direction: price above/below true opening range (8:30-9:00 AM CT) at entry
+    orb_dir = tech.get("orb_direction")
+    if orb_dir is not None and orb_dir != 0:
+        or_atr = tech.get("or_atr")
+        # Scale by OR width: narrow range = more ORB signal conviction
+        or_mult = 1.25 if (or_atr and or_atr < 0.25) else (0.5 if (or_atr and or_atr > 1.0) else 1.0)
+        orb_w   = round(0.75 * rvol_mult * or_mult, 2)
+        signals.append(("ORB Direction",
+                        f"{'Above' if orb_dir > 0 else 'Below'} OR" +
+                        (f" (or_atr={or_atr:.2f})" if or_atr else ""),
+                        orb_dir, orb_w))
+
+    # Gap fill state: gap-and-go (+1) or failed gap (-1)
+    gap_sig_val = tech.get("gap_sig")
+    if gap_sig_val is not None and gap_sig_val != 0:
+        signals.append(("Gap Fill State",
+                        "Gap-and-go" if gap_sig_val > 0 else "Failed gap",
+                        gap_sig_val, 0.5))
 
     # Gap ATR — gap size relative to ATR(14); >1.5 = exhaustion (neutral)
     gap_atr = tech.get("gap_atr")
@@ -695,12 +750,28 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
     # Earnings veto: skip ±1 day of earnings
     earnings_veto = tech.get("earnings_veto", False)
 
+    # Tape contradiction: direction opposes BOTH VWAP and ORB (Fable hard veto)
+    _vwap_vote = next((s[2] for s in signals if s[0] == "VWAP Position"), 0)
+    _orb_vote  = next((s[2] for s in signals if s[0] == "ORB Direction"), 0)
+    _dir_vote  = 1 if direction == "CALL" else (-1 if direction == "PUT" else 0)
+    tape_contradiction = (_dir_vote != 0 and _vwap_vote != 0 and _orb_vote != 0 and
+                          _dir_vote != _vwap_vote and _dir_vote != _orb_vote)
+
+    # Blown-out range: OR wider than ATR — already exhausted (Fable hard veto)
+    _or_atr_val    = tech.get("or_atr")
+    blown_out_range = (_or_atr_val is not None and _or_atr_val > 1.0)
+
+    # Dead tape: RVOL below 0.5 — no volume, avoid theta bleed
+    dead_tape = (rvol is not None and rvol < 0.5)
+
     # ── GO / NO TRADE ────────────────────────────────────────────────────────
     go_threshold = _GO_THRESHOLD_PUT if direction == "PUT" else _GO_THRESHOLD_CALL
     is_go = (direction != "NO TRADE" and vix_ok
              and go_threshold <= conviction <= _GO_CONVICTION_MAX
              and gate_pass and not yield_veto
-             and not vix_ts_block and not earnings_veto)
+             and not vix_ts_block and not earnings_veto
+             and not tape_contradiction and not blown_out_range
+             and not dead_tape and not fomc_day)
 
     star = " ⭐ SUPER FILTER" if (is_go and super_filter) else ""
     go_nogo = f"GO{star}" if is_go else "NO TRADE"
@@ -716,6 +787,14 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         go_nogo += " ⚠️ VIX BACKWARDATION"
     if earnings_veto:
         go_nogo += " ⚠️ EARNINGS WINDOW"
+    if tape_contradiction:
+        go_nogo += " ⚠️ TAPE CONTRADICTION"
+    if blown_out_range:
+        go_nogo += " ⚠️ BLOWN-OUT RANGE"
+    if dead_tape:
+        go_nogo += " ⚠️ DEAD TAPE"
+    if fomc_day:
+        go_nogo += " ⚠️ FOMC DAY"
 
     return direction, conviction, go_nogo, signals
 

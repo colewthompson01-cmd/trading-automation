@@ -125,20 +125,52 @@ DATA = {
     "top_20_triple_combinations": triple_stats[:20],
     "conviction_band_win_rates": conv_bands,
     "ticker_win_rates": ticker_stats,
-    "scanner_tickers": ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "MSTR", "HOOD"],
-    "go_window": "conviction 7.0 to 8.0 (above 8.0 = over-signaled, win rate drops to 44%)",
-    "data_source": "yfinance daily OHLCV — no intraday, no options flow, no order book",
+    "scanner_tickers": ["NVDA", "TSLA", "META", "AMZN", "AMD", "MU", "NFLX", "MSTR", "HOOD",
+                        "PLTR", "CRWD", "ARM", "HOOD", "PANW", "SMCI", "COIN", "MSTR"],
+    "go_window": "conviction 7.0 to 8.0 (above 8.0 = over-signaled, 48.9% win rate; 7-8 band = 59.0%)",
+    "data_source": "Alpaca 1-minute bars (free tier, 2yr history) + yfinance daily",
+    "alpaca_upgrade": {
+        "description": "Now have Alpaca 1-min bars for all tickers. Already computing at 10AM CT entry:",
+        "already_computed": [
+            "entry_price: true 10AM CT bar open (not daily open proxy)",
+            "close_price: 3PM CT last bar close",
+            "vwap_at_entry: VWAP from 9:30AM to 10AM",
+            "entry_vs_vwap: entry price % above/below VWAP",
+            "or_high / or_low: opening range 9:30-10:00AM high/low",
+            "or_range_pct: opening range width as % of price",
+        ],
+        "not_yet_computed_candidates": [
+            "orb_direction: is entry price above or below the opening range? (classic 0DTE signal)",
+            "or_width_vs_atr: opening range width / 14-day ATR — narrow=coiled, wide=exhausted",
+            "first_bar_momentum: direction of price drift in 9:30-10AM window",
+            "volume_ratio: 9:30-10AM cumulative volume vs 30-day average for that window",
+            "vwap_slope: is VWAP rising or falling at 10AM entry?",
+            "gap_fill_check: did overnight gap fill before 10AM?",
+            "or_midpoint_position: is entry above or below the OR midpoint?",
+            "open_to_vwap_pct: how far has price moved from open to VWAP by 10AM?",
+        ],
+    },
+    "confirmed_signal_accuracy_with_alpaca": {
+        "10Y Yield": {"accuracy_pct": 57.8, "sample_size": 540},
+        "VIX Direction": {"accuracy_pct": 57.6, "sample_size": 564},
+        "S&P Futures": {"accuracy_pct": 55.9, "sample_size": 653},
+        "VWAP Position": {"accuracy_pct": 55.8, "sample_size": 588},
+        "Sector Pulse": {"accuracy_pct": 54.4, "sample_size": 665},
+        "Pre-Market Move": {"accuracy_pct": 52.8, "sample_size": 618},
+        "DXY": {"accuracy_pct": 52.4, "sample_size": 418},
+    },
 }
 
 PROMPT = f"""You are a quantitative trading systems engineer specializing in 0DTE (zero days-to-expiry) options strategies.
 
-I have a Python 0DTE scanner that generates GO/NO-GO signals using weighted market indicators. It currently achieves a 51.5% win rate on backtest. I want to push toward 60-65%+ by finding the highest-accuracy signal combinations and identifying new signals worth adding.
+I have a Python 0DTE scanner that generates GO/NO-GO signals. We just upgraded from yfinance daily data to Alpaca 1-minute bars, which improved our backtest from 50.9% to 55.1% win rate (681 trades, 2 years). The 7-8 conviction band hits 59.0%. I want to push further using the new intraday data.
 
 ## Current System
-- Signals: VIX Direction, Sector Pulse, DXY, 10Y Yield, S&P Futures, Pre-Market Move, RSI(14), BB%B, News Sentiment, VIX IVR, Put/Call Ratio
-- GO only when: conviction in [7.0, 8.0] (conviction = 10 × agreement × √participation + catalyst_adj)
-- Data source: yfinance daily OHLCV (free, backtestable) — no intraday, no paid feeds
-- Scanner runs at 10:00 AM CST on market days
+- Signals: VIX Direction (w=2.0), Sector Pulse (1.75), DXY (1.75), 10Y Yield (1.25), S&P Futures (1.0), Pre-Market Move (1.0), VWAP Position (1.0), RSI(14) (0.5), BB%B (0.5), News Sentiment (0.5), VIX IVR (0.75), Put/Call Ratio (0.75), Gap ATR (0.75), Trend Regime (1.0)
+- GO only when: conviction in [7.0, 8.0] (formula: 10 × agreement × √participation + catalyst_adj)
+- Scanner runs at 10:00 AM CT; we have Alpaca 1-min bars from 9:30 AM onward
+- Structural gate: GO only if Pre-Market active AND (VIX Direction agrees OR both DXY+Futures agree)
+- Yield veto: block when Pre-Market and 10Y Yield vote same direction (historically 47% win rate)
 
 ## 2-Year Backtest Data
 
@@ -148,30 +180,34 @@ I have a Python 0DTE scanner that generates GO/NO-GO signals using weighted mark
 
 ## Questions
 
-### 1. High-Win-Rate Signal Combinations
-From the pair and triple combination data above, which specific combinations have the best balance of win rate AND trade frequency? I need at least 8-10 trades/year to be useful.
+### 1. New Intraday Signals (from Alpaca 1-min bars)
+I now have per-minute OHLCV from 9:30-10:00 AM before my entry. From the candidate list in `alpaca_upgrade.not_yet_computed_candidates`, which signals have the strongest theoretical and empirical basis for 0DTE direction prediction?
 
-If I were to add a "super filter" — only GO when these specific signals all agree — what win rate could I realistically expect, and how many trades per year would I get?
+For each you recommend:
+- What threshold/condition signals CALL vs PUT vs NEUTRAL
+- How to compute it from minute bars in Python
+- Realistic expected accuracy range (be honest — 52% is still additive if consistent)
+- Suggested weight in the conviction formula
 
-### 2. New Signals to Add (backtestable with yfinance)
-What additional signals could meaningfully improve win rate? Focus on signals I can compute from yfinance daily data:
-- Examples: MACD, stochastic, ATR-based volatility regime, 20/50/200 MA position, sector ETF relative strength, overnight gap size, day-of-week effect, month-of-year seasonality, earnings proximity filter
-- For each suggestion: estimated accuracy, how to compute it, what threshold/condition to use
+### 2. Signal Combinations with Intraday Data
+The best pair combos and triple combos are in the data. Now that we have VWAP Position confirmed at 55.8%, what new pairs/triples involving VWAP + intraday signals would you expect to perform best?
 
-### 3. New Signals Requiring Paid Data (worth buying?)
-Are there any paid data signals (options flow, dark pool, unusual activity, TICK/TRIN, Level 2) that have documented predictive power for 0DTE direction? If so, which single data feed would give the most edge per dollar?
+### 3. Revised Signal Weights
+Given the confirmed accuracy data (10Y Yield 57.8%, VIX Direction 57.6%, S&P Futures 55.9%, VWAP Position 55.8%), should we rebalance weights? The current weights were set before VWAP was confirmed. Write out the full revised weight dict.
 
-### 4. Structural Improvements
-Looking at the conviction band data and pair/triple combos — is there a smarter conviction formula or GO filter structure that would better separate winners from losers?
+### 4. Veto/Gate Improvements
+Are there any intraday conditions that should be hard vetoes (like our yield veto)? For example: OR range > 2× ATR (too volatile, skip), volume ratio < 0.5 (dead tape, skip)?
+
+### 5. Honest ceiling
+Given 1-minute Alpaca bars + yfinance daily, with no options flow or L2 data, what is the realistic maximum win rate ceiling? What single paid data feed would have the highest impact per dollar?
 
 ## Output Format
-1. **Top 5 signal combinations** (pair or triple) worth implementing as a "super filter," with realistic expected win rate and annual trade count
-2. **Top 5 new backtestable signals** with exact implementation guidance (yfinance-compatible Python pseudocode)
-3. **Top 2 paid data signals** worth considering, with estimated cost and edge
-4. **One structural change** to the conviction formula or GO logic if warranted
-5. **Honest ceiling**: Given daily OHLCV data only, what is the realistic maximum win rate for this system?
+1. **Top 4 new intraday signals** to implement, with Python pseudocode for minute bars and conviction weight
+2. **Revised signal weight dict** (full, copy-pasteable)
+3. **New veto conditions** (if any) with exact threshold
+4. **Honest ceiling** and best paid data recommendation
 
-Be specific and quantitative. Don't pad. If a combination only has 8 trades in 2 years, say so and note it's too thin.
+Be specific and quantitative. Don't pad. If a signal only adds 0.5% win rate, say so.
 """
 
 print("\n  Calling claude-fable-5-2... (30-120 seconds)\n")

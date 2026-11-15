@@ -129,6 +129,13 @@ def load_alpaca_data(tickers: list, start: date, end: date,
 
     got = sum(1 for v in result.values() if not v.empty)
     print(f"  Alpaca: {got}/{len(tickers)} tickers loaded")
+
+    # Pre-compute RVOL once per ticker — stored as _rvol_<ticker> key to avoid re-scanning
+    print("  Pre-computing RVOL for each ticker...", end=" ", flush=True)
+    for ticker, df in list(result.items()):
+        if not df.empty:
+            result[f"_rvol_{ticker}"] = amod.precompute_rvol(df)
+    print("done")
     return result
 
 # ── HELPERS ───────────────────────────────────────────────────────────────
@@ -285,7 +292,7 @@ def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_d
         "vix_ts":       vix_ts,
     }
 
-    # ── Alpaca VWAP at 10 AM CT ───────────────────────────────────────────
+    # ── Alpaca intraday signals (VWAP, ORB, RVOL, gap fill) ─────────────────
     alpaca_entry = None   # will replace yfinance open for P&L if available
     if alpaca_bars and ticker in alpaca_bars and not alpaca_bars[ticker].empty:
         try:
@@ -294,10 +301,17 @@ def build_day_signals(ticker, day_idx, close, open_, high_, low_, rsi_df, pctb_d
             spec  = importlib.util.spec_from_file_location("alpaca_data", str(_path))
             amod  = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(amod)
-            sig = amod.build_intraday_signals(ticker, alpaca_bars[ticker], day_date_val)
+            _atr14      = float(atr_df[ticker].iloc[prev_idx]) if ticker in atr_df.columns else None
+            _rvol_lookup = alpaca_bars.get(f"_rvol_{ticker}", {})
+            sig = amod.build_intraday_signals(ticker, alpaca_bars[ticker], day_date_val,
+                                              atr14=_atr14, rvol_lookup=_rvol_lookup)
             if sig:
                 tech["entry_vs_vwap"] = sig["entry_vs_vwap"]
                 tech["or_range_pct"]  = sig["or_range_pct"]
+                tech["orb_direction"] = sig["orb_direction"]
+                tech["rvol"]          = sig["rvol"]
+                tech["or_atr"]        = sig["or_atr"]
+                tech["gap_sig"]       = sig["gap_sig"]
                 alpaca_entry = sig["entry_price"]
                 tech["_alpaca_entry"] = alpaca_entry
                 tech["_alpaca_close"] = sig["close_price"]

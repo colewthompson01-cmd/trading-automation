@@ -35,9 +35,15 @@ except ImportError:
 CT  = ZoneInfo("America/Chicago")
 UTC = timezone.utc
 
-ENTRY_HOUR_CT   = 10   # 10:00 AM CT entry
-ENTRY_MINUTE_CT = 0
-OPEN_HOUR_CT    = 9    # market open 9:30 AM CT
+ENTRY_HOUR_CT      = 10   # 10:00 AM CT = 11:00 AM ET — scanner entry
+ENTRY_MINUTE_CT    = 0
+# NYSE opens 9:30 AM ET = 8:30 AM CT. The true opening range is the first 30 min of trading.
+TRUE_OPEN_HOUR_CT  = 8    # 8:30 AM CT = 9:30 AM ET — true market open
+TRUE_OPEN_MINUTE_CT= 30
+TRUE_OR_END_HOUR_CT= 9    # 9:00 AM CT = 10:00 AM ET — end of true 30-min OR
+TRUE_OR_END_MINUTE_CT = 0
+# Legacy: 9:30-10:00 AM CT window (kept for backward compat with existing or_range_pct)
+OPEN_HOUR_CT    = 9
 OPEN_MINUTE_CT  = 30
 CLOSE_HOUR_CT   = 15  # market close 3:00 PM CT (4:00 ET)
 CLOSE_MINUTE_CT = 0
@@ -77,17 +83,23 @@ def fetch_minute_bars(ticker: str, start: date, end: date) -> pd.DataFrame:
     return df
 
 
-def build_intraday_signals(ticker: str, bars: pd.DataFrame, day: date) -> dict | None:
+def build_intraday_signals(ticker: str, bars: pd.DataFrame, day: date,
+                           atr14: float = None,
+                           rvol_lookup: dict = None) -> dict | None:
     """
-    Given a full day's minute bars for one ticker, compute:
-      - entry_price:    first bar at or after 10:00 AM CT open price
-      - close_price:    last bar at or before 3:00 PM CT close price
-      - intraday_pct:   (close - entry) / entry * 100
-      - opening_range_high / low: 9:30–10:00 AM CT range
-      - vwap_at_entry:  VWAP from 9:30 AM to entry bar
-      - entry_vs_vwap:  entry price vs VWAP (positive = above VWAP)
-      - open_gap_pct:   (first bar open - prior day close) / prior day close * 100
-                        (requires prior-day last bar)
+    Given minute bars (multi-day OK) for one ticker, compute intraday signals for `day`.
+
+    New signals (Fable v2):
+      - orb_direction:   +1/0/-1 — price broke/held/broke the TRUE opening range
+                         (9:30-10:00 AM ET = 8:30-9:00 AM CT) with 10% buffer + 5-bar hold
+      - rvol:            9:30-10AM ET vol today / 20-session median for that window
+      - or_atr:          true OR width / atr14 (None if atr14 not passed)
+      - gap_sig:         +1 gap-and-go, -1 failed gap, 0 no gap / no fill signal
+
+    Legacy signals kept unchanged (backward compat):
+      - entry_price, close_price, intraday_pct
+      - or_high/or_low/or_range_pct (9:30-10:00 AM CT window, legacy)
+      - vwap_at_entry, entry_vs_vwap
 
     Returns None if data is insufficient.
     """
@@ -95,58 +107,145 @@ def build_intraday_signals(ticker: str, bars: pd.DataFrame, day: date) -> dict |
     if len(day_bars) < 10:
         return None
 
-    # Convert to CT for time-of-day filtering
     day_bars = day_bars.copy()
     day_bars["ct"] = day_bars.index.tz_convert(CT)
 
-    entry_dt = datetime(day.year, day.month, day.day,
-                        ENTRY_HOUR_CT, ENTRY_MINUTE_CT, tzinfo=CT)
-    open_dt  = datetime(day.year, day.month, day.day,
-                        OPEN_HOUR_CT, OPEN_MINUTE_CT, tzinfo=CT)
-    close_dt = datetime(day.year, day.month, day.day,
-                        CLOSE_HOUR_CT, CLOSE_MINUTE_CT, tzinfo=CT)
+    entry_dt     = datetime(day.year, day.month, day.day, ENTRY_HOUR_CT,       ENTRY_MINUTE_CT,     tzinfo=CT)
+    open_dt      = datetime(day.year, day.month, day.day, OPEN_HOUR_CT,        OPEN_MINUTE_CT,      tzinfo=CT)
+    close_dt     = datetime(day.year, day.month, day.day, CLOSE_HOUR_CT,       CLOSE_MINUTE_CT,     tzinfo=CT)
+    true_open_dt = datetime(day.year, day.month, day.day, TRUE_OPEN_HOUR_CT,   TRUE_OPEN_MINUTE_CT, tzinfo=CT)
+    true_or_end  = datetime(day.year, day.month, day.day, TRUE_OR_END_HOUR_CT, TRUE_OR_END_MINUTE_CT, tzinfo=CT)
 
-    # Entry bar
+    # ── Entry and close bars ─────────────────────────────────────────────────
     entry_bars = day_bars[day_bars["ct"] >= entry_dt]
     if entry_bars.empty:
         return None
-    entry_bar   = entry_bars.iloc[0]
-    entry_price = float(entry_bar["open"])
+    entry_price = float(entry_bars.iloc[0]["open"])
 
-    # Close bar
     close_bars = day_bars[day_bars["ct"] <= close_dt]
     if close_bars.empty:
         return None
-    close_price = float(close_bars.iloc[-1]["close"])
-
+    close_price  = float(close_bars.iloc[-1]["close"])
     intraday_pct = round((close_price / entry_price - 1) * 100, 3)
 
-    # Opening range: 9:30–10:00 AM CT
+    # ── Legacy opening range: 9:30-10:00 AM CT (window before scanner entry) ─
     or_bars = day_bars[(day_bars["ct"] >= open_dt) & (day_bars["ct"] < entry_dt)]
     or_high = float(or_bars["high"].max()) if not or_bars.empty else entry_price
     or_low  = float(or_bars["low"].min())  if not or_bars.empty else entry_price
 
-    # VWAP from open to entry
-    pre_entry = day_bars[day_bars["ct"] <= entry_dt]
+    # ── VWAP from true market open to entry ──────────────────────────────────
+    pre_entry = day_bars[(day_bars["ct"] >= true_open_dt) & (day_bars["ct"] <= entry_dt)]
     if not pre_entry.empty:
-        typical = (pre_entry["high"] + pre_entry["low"] + pre_entry["close"]) / 3
+        typical  = (pre_entry["high"] + pre_entry["low"] + pre_entry["close"]) / 3
         cum_vol  = pre_entry["volume"].cumsum()
         cum_tpv  = (typical * pre_entry["volume"]).cumsum()
-        vwap = float(cum_tpv.iloc[-1] / cum_vol.iloc[-1]) if cum_vol.iloc[-1] > 0 else entry_price
+        vwap     = float(cum_tpv.iloc[-1] / cum_vol.iloc[-1]) if cum_vol.iloc[-1] > 0 else entry_price
     else:
         vwap = entry_price
     entry_vs_vwap = round((entry_price / vwap - 1) * 100, 3)
+
+    # ── TRUE opening range: 8:30-9:00 AM CT (9:30-10:00 AM ET) ─────────────
+    true_or_bars = day_bars[(day_bars["ct"] >= true_open_dt) & (day_bars["ct"] < true_or_end)]
+    if not true_or_bars.empty:
+        true_or_hi = float(true_or_bars["high"].max())
+        true_or_lo = float(true_or_bars["low"].min())
+    else:
+        true_or_hi = true_or_lo = entry_price
+
+    # ── ORB direction: break with 10% buffer sustained for 5 bars post-OR ───
+    post_or = day_bars[(day_bars["ct"] >= true_or_end) & (day_bars["ct"] < entry_dt)]
+    orb_dir = 0
+    if not post_or.empty and true_or_hi > true_or_lo:
+        buf    = 0.10 * (true_or_hi - true_or_lo)
+        last5  = post_or["close"].tail(5)
+        if entry_price > true_or_hi + buf and len(last5) >= 3 and (last5 > true_or_hi).all():
+            orb_dir = 1
+        elif entry_price < true_or_lo - buf and len(last5) >= 3 and (last5 < true_or_lo).all():
+            orb_dir = -1
+
+    # ── Relative volume: today's OR window vs 20-session median ─────────────
+    today_vol = true_or_bars["volume"].sum() if not true_or_bars.empty else 0
+    # rvol_lookup: pre-computed {date: rvol} dict (pass from precompute_rvol for speed)
+    # Falls back to None if not provided — scanner passes it, backtest pre-computes
+    rvol = rvol_lookup.get(day) if rvol_lookup else None
+
+    # ── OR width / ATR ───────────────────────────────────────────────────────
+    or_atr = None
+    if atr14 and atr14 > 0 and true_or_hi > true_or_lo:
+        or_atr = round((true_or_hi - true_or_lo) / atr14, 3)
+
+    # ── Gap fill state ───────────────────────────────────────────────────────
+    gap_sig    = 0
+    prev_close = None
+    if day_idx >= 1:
+        prev_day      = all_days_sorted[day_idx - 1]
+        prev_day_bars = bars[bars.index.date == prev_day].copy()
+        prev_day_bars["ct"] = prev_day_bars.index.tz_convert(CT)
+        prev_close_bars = prev_day_bars[prev_day_bars["ct"] <= datetime(prev_day.year, prev_day.month, prev_day.day, CLOSE_HOUR_CT, CLOSE_MINUTE_CT, tzinfo=CT)]
+        if not prev_close_bars.empty:
+            prev_close = float(prev_close_bars.iloc[-1]["close"])
+
+    if prev_close is not None and true_or_hi > true_or_lo:
+        gap   = entry_price - prev_close
+        gap_n = abs(gap) / (true_or_hi - true_or_lo)
+        if abs(gap_n) >= 0.25:
+            s       = int(np.sign(gap))
+            day_lo  = float(day_bars["low"].min())
+            day_hi  = float(day_bars["high"].max())
+            filled  = (day_lo <= prev_close) if s > 0 else (day_hi >= prev_close)
+            if not filled:
+                gap_sig = s      # gap-and-go: trade in gap direction
+            elif filled and int(np.sign(entry_price - prev_close)) == -s:
+                gap_sig = -s     # failed gap: fade the gap
 
     return {
         "entry_price":      round(entry_price, 4),
         "close_price":      round(close_price, 4),
         "intraday_pct":     intraday_pct,
+        # legacy OR (9:30-10:00 AM CT)
         "or_high":          round(or_high, 4),
         "or_low":           round(or_low, 4),
         "or_range_pct":     round((or_high / or_low - 1) * 100, 3) if or_low > 0 else 0,
+        # VWAP
         "vwap_at_entry":    round(vwap, 4),
         "entry_vs_vwap":    entry_vs_vwap,
+        # new Fable v2 signals
+        "true_or_high":     round(true_or_hi, 4),
+        "true_or_low":      round(true_or_lo, 4),
+        "orb_direction":    orb_dir,
+        "rvol":             rvol,
+        "or_atr":           or_atr,
+        "gap_sig":          gap_sig,
+        "prev_close":       round(prev_close, 4) if prev_close else None,
     }
+
+
+def precompute_rvol(bars: pd.DataFrame, window: int = 20) -> dict:
+    """
+    Pre-compute RVOL for every trading day. Returns {date: rvol_float}.
+    Uses pandas-native ops only — no Python-level date loops.
+    """
+    if bars.empty:
+        return {}
+
+    ct_idx    = bars.index.tz_convert(CT)
+    ct_hour   = ct_idx.hour
+    ct_minute = ct_idx.minute
+    # normalize() gives midnight Timestamp in CT — avoids slow .date property
+    ct_day    = ct_idx.normalize()
+
+    or_mask = (
+        ((ct_hour == TRUE_OPEN_HOUR_CT)  & (ct_minute >= TRUE_OPEN_MINUTE_CT)) |
+        ((ct_hour == TRUE_OR_END_HOUR_CT) & (ct_minute < TRUE_OR_END_MINUTE_CT))
+    )
+
+    vol_series         = pd.Series(bars["volume"].values, index=ct_day, dtype="float64")
+    or_vol_by_day      = vol_series[or_mask].groupby(level=0).sum()
+    rolling_median     = or_vol_by_day.shift(1).rolling(window, min_periods=5).median()
+    rvol_series        = (or_vol_by_day / rolling_median).round(2)
+
+    return {ts.date(): (float(v) if pd.notna(v) else None)
+            for ts, v in rvol_series.items()}
 
 
 def fetch_intraday_batch(tickers: list[str], start: date, end: date,
