@@ -1,81 +1,423 @@
 {
-  "generated_at": "2026-11-15T03:57:48",
-  "go_count": 0,
+  "generated_at": "2026-11-16T17:00:31",
+  "go_count": 3,
   "market": {
-    "vix": 19.3,
-    "vix_chg": 0.6,
-    "futures_pct": -0.42,
-    "futures_price": 7583.0,
-    "spy_price": 749.6,
-    "spy_premkt": -0.99,
-    "spy_rsi": 45.2
+    "vix": 21.11,
+    "vix_chg": 1.81,
+    "futures_pct": 0,
+    "futures_price": 7493.2,
+    "spy_price": 745.25,
+    "spy_premkt": -1.21,
+    "spy_rsi": 39.7
   },
   "cross": {
     "10Y Yield": {
-      "price": 5.15,
-      "pct": 1.0
+      "price": 5.14,
+      "pct": -0.17
     },
-    "DXY": {
-      "price": 103.41,
-      "pct": 0.23
-    },
-    "Oil (WTI)": {
-      "price": 88.56,
-      "pct": -0.2
-    },
-    "Gold": {
-      "price": 3886.3,
-      "pct": 0.03
+    "Bitcoin": {
+      "price": 64827.15,
+      "pct": -0.73
     }
   },
   "sectors": {
-    "Tech": -2.01,
-    "Financials": 0.81,
-    "Energy": 0.98,
-    "Healthcare": 0.54,
-    "Comms": 1.05,
-    "Industrials": -0.39
+    "Tech": -2.21,
+    "Financials": -0.44,
+    "Energy": -1.45,
+    "Healthcare": 0.05,
+    "Comms": -0.94,
+    "Industrials": -1.04
   },
   "catalysts": [
-    "GDP release",
-    "PPI data"
+    "Fed rate decision / FOMC",
+    "Retail sales data"
   ],
-  "go_signals": [],
-  "all_results": [
-    {
-      "ticker": "NVDA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
-    },
-    {
-      "ticker": "TSLA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
-    },
+  "go_signals": [
     {
       "ticker": "META",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
-    },
-    {
-      "ticker": "AMZN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 7.7,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "price": 629.4,
+      "premkt": -1.92,
+      "exp_date": "2026-11-16",
+      "signals": [
+        {
+          "label": "S&P Futures",
+          "value": "+0.00%",
+          "vote": 0
+        },
+        {
+          "label": "Pre-Market Move",
+          "value": "-1.92%",
+          "vote": -1
+        },
+        {
+          "label": "VIX Direction",
+          "value": "+1.81",
+          "vote": -1
+        },
+        {
+          "label": "10Y Yield",
+          "value": "-0.17%",
+          "vote": 0
+        },
+        {
+          "label": "News Sentiment",
+          "value": "BULLISH",
+          "vote": 1
+        },
+        {
+          "label": "Sector Pulse",
+          "value": "1 up / 5 dn",
+          "vote": -1
+        },
+        {
+          "label": "RSI (14)",
+          "value": "52.7",
+          "vote": 0
+        },
+        {
+          "label": "BB %B",
+          "value": "0.46",
+          "vote": 0
+        },
+        {
+          "label": "VIX IVR",
+          "value": "44th pctile",
+          "vote": 0
+        },
+        {
+          "label": "Put/Call Ratio",
+          "value": "1.43",
+          "vote": -1
+        },
+        {
+          "label": "Gap ATR",
+          "value": "-0.26x ATR",
+          "vote": -1
+        }
+      ],
+      "chain": [
+        {
+          "strike": 630.0,
+          "lastPrice": 3.34,
+          "bid": 3.25,
+          "ask": 3.35,
+          "volume": 4642,
+          "openInterest": 1064,
+          "iv": 23.1
+        },
+        {
+          "strike": 627.5,
+          "lastPrice": 2.06,
+          "bid": 1.98,
+          "ask": 2.1,
+          "volume": 5237,
+          "openInterest": 417,
+          "iv": 22.5
+        },
+        {
+          "strike": 625.0,
+          "lastPrice": 1.23,
+          "bid": 1.23,
+          "ask": 1.25,
+          "volume": 9124,
+          "openInterest": 519,
+          "iv": 22.5
+        },
+        {
+          "strike": 622.5,
+          "lastPrice": 0.69,
+          "bid": 0.7,
+          "ask": 0.74,
+          "volume": 9041,
+          "openInterest": 159,
+          "iv": 23.0
+        }
+      ],
+      "recommended": {
+        "strike": 630.0,
+        "direction": "PUT",
+        "limit": 3.3,
+        "cost_per_contract": 330.0,
+        "stop": 1.65,
+        "target_50": 4.95,
+        "target_100": 6.6
+      }
     },
     {
       "ticker": "MU",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 7.4,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "price": 735.51,
+      "premkt": -5.5,
+      "exp_date": "2026-11-16",
+      "signals": [
+        {
+          "label": "S&P Futures",
+          "value": "+0.00%",
+          "vote": 0
+        },
+        {
+          "label": "Pre-Market Move",
+          "value": "-5.50%",
+          "vote": -1
+        },
+        {
+          "label": "VIX Direction",
+          "value": "+1.81",
+          "vote": -1
+        },
+        {
+          "label": "10Y Yield",
+          "value": "-0.17%",
+          "vote": 0
+        },
+        {
+          "label": "News Sentiment",
+          "value": "BULLISH",
+          "vote": 1
+        },
+        {
+          "label": "Sector Pulse",
+          "value": "1 up / 5 dn",
+          "vote": -1
+        },
+        {
+          "label": "RSI (14)",
+          "value": "35.6",
+          "vote": 1
+        },
+        {
+          "label": "BB %B",
+          "value": "0.24",
+          "vote": 0
+        },
+        {
+          "label": "VIX IVR",
+          "value": "44th pctile",
+          "vote": 0
+        },
+        {
+          "label": "Put/Call Ratio",
+          "value": "1.43",
+          "vote": -1
+        },
+        {
+          "label": "Gap ATR",
+          "value": "-0.47x ATR",
+          "vote": -1
+        },
+        {
+          "label": "Trend Regime",
+          "value": "Bearish",
+          "vote": -1
+        }
+      ],
+      "chain": [
+        {
+          "strike": 735.0,
+          "lastPrice": 6.85,
+          "bid": 6.5,
+          "ask": 6.6,
+          "volume": 7527,
+          "openInterest": 1603,
+          "iv": 44.6
+        },
+        {
+          "strike": 732.5,
+          "lastPrice": 5.5,
+          "bid": 5.25,
+          "ask": 5.5,
+          "volume": 3913,
+          "openInterest": 178,
+          "iv": 45.0
+        },
+        {
+          "strike": 730.0,
+          "lastPrice": 4.3,
+          "bid": 4.1,
+          "ask": 4.45,
+          "volume": 9640,
+          "openInterest": 1820,
+          "iv": 44.8
+        },
+        {
+          "strike": 727.5,
+          "lastPrice": 3.55,
+          "bid": 3.2,
+          "ask": 3.4,
+          "volume": 3864,
+          "openInterest": 100,
+          "iv": 43.5
+        }
+      ],
+      "recommended": {
+        "strike": 735.0,
+        "direction": "PUT",
+        "limit": 6.55,
+        "cost_per_contract": 655.0,
+        "stop": 3.27,
+        "target_50": 9.82,
+        "target_100": 13.1
+      }
+    },
+    {
+      "ticker": "QQQ",
+      "direction": "PUT",
+      "conviction": 7.4,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "price": 667.89,
+      "premkt": -1.76,
+      "exp_date": "2026-11-16",
+      "signals": [
+        {
+          "label": "S&P Futures",
+          "value": "+0.00%",
+          "vote": 0
+        },
+        {
+          "label": "Pre-Market Move",
+          "value": "-1.76%",
+          "vote": -1
+        },
+        {
+          "label": "VIX Direction",
+          "value": "+1.81",
+          "vote": -1
+        },
+        {
+          "label": "10Y Yield",
+          "value": "-0.17%",
+          "vote": 0
+        },
+        {
+          "label": "News Sentiment",
+          "value": "BULLISH",
+          "vote": 1
+        },
+        {
+          "label": "Sector Pulse",
+          "value": "1 up / 5 dn",
+          "vote": -1
+        },
+        {
+          "label": "RSI (14)",
+          "value": "35.1",
+          "vote": 1
+        },
+        {
+          "label": "BB %B",
+          "value": "0.22",
+          "vote": 0
+        },
+        {
+          "label": "VIX IVR",
+          "value": "44th pctile",
+          "vote": 0
+        },
+        {
+          "label": "Put/Call Ratio",
+          "value": "1.43",
+          "vote": -1
+        },
+        {
+          "label": "Gap ATR",
+          "value": "-0.27x ATR",
+          "vote": -1
+        },
+        {
+          "label": "Trend Regime",
+          "value": "Bearish",
+          "vote": -1
+        }
+      ],
+      "chain": [
+        {
+          "strike": 668.0,
+          "lastPrice": 2.17,
+          "bid": 2.15,
+          "ask": 2.17,
+          "volume": 70935,
+          "openInterest": 2445,
+          "iv": 15.2
+        },
+        {
+          "strike": 667.0,
+          "lastPrice": 1.75,
+          "bid": 1.75,
+          "ask": 1.76,
+          "volume": 88363,
+          "openInterest": 2077,
+          "iv": 15.7
+        },
+        {
+          "strike": 669.0,
+          "lastPrice": 2.78,
+          "bid": 2.76,
+          "ask": 2.78,
+          "volume": 50976,
+          "openInterest": 2588,
+          "iv": 15.7
+        },
+        {
+          "strike": 666.0,
+          "lastPrice": 1.35,
+          "bid": 1.35,
+          "ask": 1.36,
+          "volume": 80927,
+          "openInterest": 1438,
+          "iv": 15.7
+        }
+      ],
+      "recommended": {
+        "strike": 668.0,
+        "direction": "PUT",
+        "limit": 2.16,
+        "cost_per_contract": 216.0,
+        "stop": 1.08,
+        "target_50": 3.24,
+        "target_100": 4.32
+      }
+    }
+  ],
+  "all_results": [
+    {
+      "ticker": "NVDA",
+      "direction": "PUT",
+      "conviction": 7.2,
+      "go_nogo": "NO TRADE \u26a0\ufe0f EARNINGS WINDOW",
+      "has_0dte": true
+    },
+    {
+      "ticker": "TSLA",
+      "direction": "PUT",
+      "conviction": 5.9,
+      "go_nogo": "NO TRADE",
+      "has_0dte": true
+    },
+    {
+      "ticker": "META",
+      "direction": "PUT",
+      "conviction": 7.7,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "has_0dte": true
+    },
+    {
+      "ticker": "AMZN",
+      "direction": "PUT",
+      "conviction": 5.3,
+      "go_nogo": "NO TRADE",
+      "has_0dte": true
+    },
+    {
+      "ticker": "MU",
+      "direction": "PUT",
+      "conviction": 7.4,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "has_0dte": true
     },
     {
       "ticker": "NFLX",
@@ -100,10 +442,10 @@
     },
     {
       "ticker": "QQQ",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 7.4,
+      "go_nogo": "GO \u2b50 SUPER FILTER",
+      "has_0dte": true
     },
     {
       "ticker": "PLTR",
