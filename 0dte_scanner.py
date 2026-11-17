@@ -363,18 +363,21 @@ def get_ticker_technicals(ticker, market_tech):
     try:
         t    = yf.Ticker(ticker)
         hist = t.history(period="60d")   # 60d needed for 50-MA trend regime
-        h1m  = t.history(period="1d", interval="1m", prepost=True)
+        h1m  = t.history(period="1d", interval="1m", prepost=False)  # regular hours only
+        h1m_full = t.history(period="1d", interval="1m", prepost=True)  # includes pre-mkt
         h2d  = t.history(period="2d")
-        prev    = float(h2d["Close"].iloc[-2])
-        current = float(h1m["Close"].iloc[-1])
-        result["tk_price"]  = round(current, 2)
-        result["tk_premkt"] = round((current / prev - 1) * 100, 2)
+        prev       = float(h2d["Close"].iloc[-2])
+        today_open = float(h1m["Open"].iloc[0]) if not h1m.empty else prev
+        current    = float(h1m["Close"].iloc[-1]) if not h1m.empty else prev
+        premkt_current = float(h1m_full["Close"].iloc[-1]) if not h1m_full.empty else prev
+        result["tk_price"]    = round(current, 2)
+        result["tk_intraday"] = round((current / today_open - 1) * 100, 2)   # live move from open
+        result["tk_premkt"]   = round((today_open / prev - 1) * 100, 2)      # gap at open (kept for gap signal)
         result["tk_rsi"]    = calc_rsi(hist["Close"])
         result["tk_pctb"]   = calc_bb_pctb(hist["Close"])
 
         # Gap ATR: today's gap size relative to ATR(14)
         try:
-            today_open = float(h1m["Open"].iloc[0])
             tr = pd.concat([
                 hist["High"] - hist["Low"],
                 (hist["High"] - hist["Close"].shift(1)).abs(),
@@ -568,12 +571,16 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
         vote = 1 if fp > 0.1 else (-1 if fp < -0.1 else 0)
         signals.append(("S&P Futures", f"{fp:+.2f}%", vote, 1.25))   # 55.9% → up from 1.0
 
-    premkt = tech.get("tk_premkt", tech.get("spy_premkt"))
-    gap_filled = tech.get("gap_sig") == 0 and tech.get("gap_atr", 0) != 0  # stale if gap filled
-    if premkt is not None:
-        vote = 1 if premkt > 0.1 else (-1 if premkt < -0.1 else 0)
-        pm_w = 0.0 if gap_filled else 0.75   # zero out if gap already filled (Fable rec)
-        signals.append(("Pre-Market Move", f"{premkt:+.2f}%", vote, pm_w))
+    # Use live intraday move (from open) if available, fall back to pre-market gap
+    intraday = tech.get("tk_intraday")
+    premkt   = tech.get("tk_premkt", tech.get("spy_premkt"))
+    move     = intraday if intraday is not None else premkt
+    move_lbl = "Intraday Move" if intraday is not None else "Pre-Market Move"
+    gap_filled = tech.get("gap_sig") == 0 and tech.get("gap_atr", 0) != 0
+    if move is not None:
+        vote = 1 if move > 0.1 else (-1 if move < -0.1 else 0)
+        pm_w = 0.0 if gap_filled else 0.75
+        signals.append((move_lbl, f"{move:+.2f}%", vote, pm_w))
 
     if "vix_chg" in tech:                            # 57.6% — highest
         vc   = tech["vix_chg"]
@@ -725,7 +732,7 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
     conviction = round(conviction, 1)
 
     # ── Structural gate + veto logic (Fable-recommended) ────────────────────
-    _pm_vote    = next((s[2] for s in signals if s[0] == "Pre-Market Move"), 0)
+    _pm_vote    = next((s[2] for s in signals if s[0] in ("Pre-Market Move", "Intraday Move")), 0)
     _vix_vote   = next((s[2] for s in signals if s[0] == "VIX Direction"), 0)
     _sec_vote   = next((s[2] for s in signals if s[0] == "Sector Pulse"), 0)
     _dxy_vote   = next((s[2] for s in signals if s[0] == "DXY"), 0)
@@ -1330,12 +1337,20 @@ def format_multi_html(results, market_tech, cross, sectors):
         conviction= r["conviction"]
         direction = r["direction"]
         tech      = r.get("tech", {})
+        intraday  = tech.get("tk_intraday")
         premkt    = tech.get("tk_premkt", tech.get("spy_premkt", 0))
-        p_col     = POS if premkt >= 0 else NEG
-        no_rows += (f'<tr><td style="padding:6px 10px;">{ticker}</td>'
+        move      = intraday if intraday is not None else premkt
+        p_col     = POS if move >= 0 else NEG
+        move_lbl  = f"{move:+.2f}% {'intra' if intraday is not None else 'pm'}"
+        # Extract veto flags from go_nogo string
+        go_nogo   = r.get("go_nogo", "")
+        veto_flags = [p.strip() for p in go_nogo.replace("NO TRADE","").replace("⚠️","⚠").split("⚠") if p.strip()]
+        veto_str  = " · ".join(veto_flags) if veto_flags else ("Low conviction" if conviction < 7.0 else "Mixed signals")
+        no_rows += (f'<tr><td style="padding:6px 10px;font-weight:bold;">{ticker}</td>'
                     f'<td style="padding:6px 10px;">{direction}</td>'
                     f'<td style="padding:6px 10px;">{conviction}/10</td>'
-                    f'<td style="padding:6px 10px;color:{p_col};">{premkt:+.2f}%</td></tr>')
+                    f'<td style="padding:6px 10px;color:{p_col};">{move_lbl}</td>'
+                    f'<td style="padding:6px 10px;font-size:11px;color:#888;">{veto_str}</td></tr>')
 
     no_expiry_text = ""
     if no_expiry:
@@ -1373,7 +1388,7 @@ def format_multi_html(results, market_tech, cross, sectors):
 
   {'<div style="padding:8px 28px 4px;font-size:13px;color:#888;">No GO signals this scan. All signals below conviction threshold or mixed direction.</div>' if go_count == 0 else go_cards}
 
-  {'<div style="padding:16px 28px 8px;"><div style="font-size:13px;font-weight:bold;color:' + NAV + ';text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ' + NAV + ';padding-bottom:6px;margin-bottom:14px;">No Trade</div><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="background:#DCE6F1;"><td style="padding:7px 10px;font-weight:bold;">Ticker</td><td style="padding:7px 10px;font-weight:bold;">Direction</td><td style="padding:7px 10px;font-weight:bold;">Conviction</td><td style="padding:7px 10px;font-weight:bold;">Pre-mkt</td></tr>' + no_rows + '</table></div>' if no_rows else ''}
+  {'<div style="padding:16px 28px 8px;"><div style="font-size:13px;font-weight:bold;color:' + NAV + ';text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ' + NAV + ';padding-bottom:6px;margin-bottom:14px;">No Trade</div><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="background:#DCE6F1;"><td style="padding:7px 10px;font-weight:bold;">Ticker</td><td style="padding:7px 10px;font-weight:bold;">Direction</td><td style="padding:7px 10px;font-weight:bold;">Conviction</td><td style="padding:7px 10px;font-weight:bold;">Move</td><td style="padding:7px 10px;font-weight:bold;">Blocked By</td></tr>' + no_rows + '</table></div>' if no_rows else ''}
 
   {no_expiry_text}
 
