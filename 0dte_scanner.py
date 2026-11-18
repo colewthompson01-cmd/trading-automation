@@ -33,7 +33,7 @@ MEGA_CAPS = ["NVDA", "AAPL", "MSFT", "META", "AMZN", "GOOGL", "TSLA"]
 
 # Tickers to scan — only those with today's 0DTE expiry will be included
 SCAN_TICKERS = ["NVDA", "TSLA", "META", "AMZN", "MU", "NFLX", "MSTR", "HOOD",
-                "QQQ", "PLTR", "CRWD", "ARM", "COIN", "SMCI"]
+                "QQQ", "PLTR", "CRWD", "ARM", "COIN", "SMCI", "UVXY"]
 # Removed (sub-50% under super-filter): AMD 33%, GOOGL 33%, PANW 43%
 # Removed (low sample / poor historical): SPY, IWM, AAPL, MSFT
 
@@ -57,6 +57,7 @@ TICKER_SECTOR_ETF = {
     "NFLX": "XLC",
     "MSTR": "XLF",
     "HOOD": "XLF",
+    "UVXY": "^VIX",   # UVXY tracks VIX futures — use VIX itself as benchmark
 }
 
 _SSL_CTX = ssl.create_default_context()
