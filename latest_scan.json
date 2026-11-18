@@ -1,44 +1,44 @@
 {
-  "generated_at": "2026-11-17T16:32:09",
+  "generated_at": "2026-11-17T16:02:55",
   "go_count": 0,
   "market": {
-    "vix": 25.18,
-    "vix_chg": 2.27,
-    "futures_pct": -1.09,
-    "futures_price": 7358.2,
-    "spy_price": 730.8,
-    "spy_premkt": -1.24,
-    "spy_rsi": 34.0
+    "vix": 25.46,
+    "vix_chg": 2.55,
+    "futures_pct": -1.03,
+    "futures_price": 7362.2,
+    "spy_price": 732.9,
+    "spy_premkt": -0.95,
+    "spy_rsi": 34.5
   },
   "cross": {
     "10Y Yield": {
-      "price": 5.11,
-      "pct": -0.16
+      "price": 5.1,
+      "pct": -0.35
     },
     "DXY": {
-      "price": 103.45,
-      "pct": -0.1
+      "price": 103.55,
+      "pct": 0.0
     },
     "Oil (WTI)": {
-      "price": 86.76,
-      "pct": 1.21
+      "price": 85.68,
+      "pct": -0.05
     },
     "Gold": {
-      "price": 3869.0,
-      "pct": 0.42
+      "price": 3851.9,
+      "pct": -0.03
     },
     "Bitcoin": {
-      "price": 63800.79,
-      "pct": -1.63
+      "price": 64258.31,
+      "pct": -0.92
     }
   },
   "sectors": {
-    "Tech": -1.94,
-    "Financials": -1.67,
-    "Energy": 0.04,
-    "Healthcare": -1.06,
-    "Comms": -0.95,
-    "Industrials": -0.47
+    "Tech": -0.91,
+    "Financials": -1.91,
+    "Energy": -0.52,
+    "Healthcare": -1.41,
+    "Comms": -1.46,
+    "Industrials": -0.55
   },
   "catalysts": [
     "NVDA earnings today",
