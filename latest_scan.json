@@ -1,85 +1,84 @@
 {
-  "generated_at": "2026-11-17T16:02:55",
+  "generated_at": "2026-11-18T16:32:27",
   "go_count": 0,
   "market": {
-    "vix": 25.46,
-    "vix_chg": 2.55,
-    "futures_pct": -1.03,
-    "futures_price": 7362.2,
-    "spy_price": 732.9,
-    "spy_premkt": -0.95,
-    "spy_rsi": 34.5
+    "vix": 25.21,
+    "vix_chg": -0.25,
+    "futures_pct": -0.59,
+    "futures_price": 7315.8,
+    "spy_price": 728.7,
+    "spy_premkt": -0.51,
+    "spy_rsi": 34.3
   },
   "cross": {
     "10Y Yield": {
-      "price": 5.1,
-      "pct": -0.35
+      "price": 5.07,
+      "pct": -0.73
     },
     "DXY": {
-      "price": 103.55,
-      "pct": 0.0
+      "price": 103.87,
+      "pct": 0.37
     },
     "Oil (WTI)": {
-      "price": 85.68,
-      "pct": -0.05
+      "price": 82.95,
+      "pct": -3.56
     },
     "Gold": {
-      "price": 3851.9,
-      "pct": -0.03
+      "price": 3744.3,
+      "pct": -3.1
     },
     "Bitcoin": {
-      "price": 64258.31,
-      "pct": -0.92
+      "price": 62347.26,
+      "pct": -3.92
     }
   },
   "sectors": {
-    "Tech": -0.91,
-    "Financials": -1.91,
-    "Energy": -0.52,
-    "Healthcare": -1.41,
-    "Comms": -1.46,
-    "Industrials": -0.55
+    "Tech": -0.48,
+    "Financials": -0.94,
+    "Energy": -2.68,
+    "Healthcare": -1.51,
+    "Comms": 0.29,
+    "Industrials": -0.19
   },
   "catalysts": [
-    "NVDA earnings today",
     "Retail sales data"
   ],
   "go_signals": [],
   "all_results": [
     {
       "ticker": "NVDA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 1.0,
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f EARNINGS WINDOW",
+      "has_0dte": true
     },
     {
       "ticker": "TSLA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 0.8,
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "META",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 3.5,
+      "go_nogo": "NO TRADE",
+      "has_0dte": true
     },
     {
       "ticker": "AMZN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 0.0,
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f YIELD VETO",
+      "has_0dte": true
     },
     {
       "ticker": "MU",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.3,
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "NFLX",
@@ -105,8 +104,8 @@
     {
       "ticker": "QQQ",
       "direction": "PUT",
-      "conviction": 6.0,
-      "go_nogo": "NO TRADE",
+      "conviction": 1.8,
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
       "has_0dte": true
     },
     {
@@ -139,6 +138,13 @@
     },
     {
       "ticker": "SMCI",
+      "direction": "\u2014",
+      "conviction": 0,
+      "go_nogo": "\u2014",
+      "has_0dte": false
+    },
+    {
+      "ticker": "UVXY",
       "direction": "\u2014",
       "conviction": 0,
       "go_nogo": "\u2014",
