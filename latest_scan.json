@@ -1,154 +1,169 @@
 {
-  "generated_at": "2026-11-19T16:34:02",
+  "generated_at": "2026-11-20T15:45:34",
   "go_count": 0,
+  "watch_count": 0,
   "market": {
-    "vix": 25.38,
-    "vix_chg": 0.82,
-    "futures_pct": -0.23,
-    "futures_price": 7323.8,
-    "spy_price": 728.75,
-    "spy_premkt": -0.2,
-    "spy_rsi": 38.3
+    "vix": 29.59,
+    "vix_chg": 1.15,
+    "futures_pct": -0.88,
+    "futures_price": 7134.0,
+    "spy_price": 707.44,
+    "spy_premkt": -1.18,
+    "spy_rsi": 33.2
   },
   "cross": {
     "10Y Yield": {
-      "price": 5.07,
-      "pct": 0.12
+      "price": 4.96,
+      "pct": -1.86
     },
     "DXY": {
-      "price": 103.85,
-      "pct": -0.01
+      "price": 103.71,
+      "pct": -0.18
     },
     "Oil (WTI)": {
-      "price": 83.5,
-      "pct": 0.29
+      "price": 81.53,
+      "pct": -2.02
     },
     "Gold": {
-      "price": 3679.8,
-      "pct": -1.66
+      "price": 3550.1,
+      "pct": -3.67
     },
     "Bitcoin": {
-      "price": 62984.08,
-      "pct": -0.01
+      "price": 59805.71,
+      "pct": -3.39
     }
   },
   "sectors": {
-    "Tech": 0.92,
-    "Financials": -0.94,
-    "Energy": 0.0,
-    "Healthcare": -1.77,
-    "Comms": -0.14,
-    "Industrials": -0.81
+    "Tech": -4.16,
+    "Financials": 0.13,
+    "Energy": 0.56,
+    "Healthcare": 1.19,
+    "Comms": -0.36,
+    "Industrials": -0.89
   },
-  "catalysts": [
-    "Retail sales data"
-  ],
+  "catalysts": [],
   "go_signals": [],
+  "watch_signals": [],
   "all_results": [
     {
       "ticker": "NVDA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.8,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "TSLA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 1.2,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "META",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "AMZN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 1.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK \u26a0\ufe0f GATE FAIL \u26a0\ufe0f YIELD VETO",
+      "has_0dte": true
     },
     {
       "ticker": "MU",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "NFLX",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.3,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK \u26a0\ufe0f GATE FAIL",
+      "has_0dte": true
     },
     {
       "ticker": "MSTR",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.8,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "HOOD",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "QQQ",
       "direction": "PUT",
-      "conviction": 4.2,
-      "go_nogo": "NO TRADE",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
     },
     {
       "ticker": "PLTR",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "CRWD",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "ARM",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "COIN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "SMCI",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "PUT",
+      "conviction": 2.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "has_0dte": true
     },
     {
       "ticker": "UVXY",
-      "direction": "\u2014",
-      "conviction": 0,
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 0.3,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK \u26a0\ufe0f YIELD VETO",
+      "has_0dte": true
     }
   ]
 }
