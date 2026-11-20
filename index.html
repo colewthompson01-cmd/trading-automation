@@ -648,19 +648,78 @@ function renderCard(r) {
   </div>`;
 }
 
+// ── WATCH card (amber, no full ATP block) ────────────────────────────────
+function renderWatchCard(r) {
+  const dir = r.direction;
+  const rec = r.recommended;
+  const move = r.intraday != null ? r.intraday : r.premkt;
+  const moveLbl = r.intraday != null ? 'intra' : 'pm';
+  const moveStr = (move >= 0 ? '+' : '') + fmt(move) + '% ' + moveLbl;
+
+  const refHtml = rec ? `
+  <div style="background:#fffbea;border-top:2px solid #c88000;padding:10px 14px;font-size:13px;color:#7a5500;">
+    \u{1F440} Reference: <strong>$${fmt(rec.strike,0)} ${dir}</strong> @ ~$${fmt(rec.limit)} mid
+    (~$${rec.cost_per_contract}/ct) &nbsp;&middot;&nbsp; ${r.exp_date || 'Today'} 0DTE
+    <div style="font-size:11px;margin-top:4px;color:#9a6600;font-style:italic;">
+      Do NOT auto-enter. Confirm momentum before trading.
+    </div>
+  </div>` : '';
+
+  const sigHtml = r.signals.slice(0, 6).map(s => {
+    const vc  = s.vote > 0 ? 'up' : s.vote < 0 ? 'down' : 'neutral';
+    const lbl = s.vote > 0 ? '▲ CALL' : s.vote < 0 ? '▼ PUT' : '— neut';
+    return `<div class="signal-row">
+      <span class="signal-label">${s.label}</span>
+      <span class="signal-val">${s.value}</span>
+      <span class="signal-vote ${vc}">${lbl}</span>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="trade-card" style="border-color:#c88000;">
+    <div class="card-header" style="background:#c88000;">
+      <div>
+        <div class="card-ticker">\u{1F440} ${r.ticker}</div>
+        <div class="card-dir">${dir} &middot; $${fmt(r.price,2)} &middot; Move ${moveStr}</div>
+      </div>
+      <div class="conviction-badge" style="background:rgba(0,0,0,0.2);">
+        <div class="conviction-num">${r.conviction}</div>
+        <div class="conviction-denom">/10</div>
+        <div class="conviction-label">watch</div>
+      </div>
+    </div>
+    ${refHtml}
+    <div class="signals-section">
+      <div class="signals-title">Signal Breakdown</div>
+      ${sigHtml}
+    </div>
+  </div>`;
+}
+
 // ── Render all results table ──────────────────────────────────────────────
+function tierColor(go_nogo) {
+  if (go_nogo.startsWith('GO'))         return '#1a7a1a';
+  if (go_nogo.startsWith('WATCH'))      return '#c88000';
+  if (go_nogo.startsWith('OVERCOOKED')) return '#8B4513';
+  return 'var(--muted)';
+}
+
 function renderAllResults(results) {
   const rows = results.filter(r => r.has_0dte).map(r => {
-    const isGo = r.go_nogo.startsWith('GO');
+    const tier   = (r.tier || r.go_nogo.split(' ')[0]);
     const dirTag = r.direction === 'CALL' ? `<span class="tag call">CALL</span>`
                  : r.direction === 'PUT'  ? `<span class="tag put">PUT</span>`
                  : `<span class="tag none">—</span>`;
-    const cv = isGo ? `<strong>${r.conviction}</strong>` : `<span style="color:var(--muted)">${r.conviction}</span>`;
+    const cv = `<span style="font-weight:700;color:${tierColor(r.go_nogo)}">${r.conviction}</span>`;
+    const flags = r.go_nogo.replace(/^(GO|WATCH|OVERCOOKED|NO TRADE)\s*/,'')
+                            .replace(/⭐.*?(?=⚠|$)/,'').replace(/⚠️/g,'⚠').trim();
+    const status = `<span style="color:${tierColor(r.go_nogo)};font-weight:700;">${tier}</span>`
+                 + (flags ? `<span style="font-size:11px;color:var(--muted);margin-left:4px;">${flags}</span>` : '');
     return `<tr>
       <td style="font-weight:700">${r.ticker}</td>
       <td>${dirTag}</td>
       <td>${cv}</td>
-      <td style="font-size:12px;color:var(--muted);">${r.go_nogo.replace(/^GO\s*/,'').replace(/⭐.*$/,'').replace(/⚠️/,'⚠').trim() || (isGo?'GO':'—')}</td>
+      <td style="font-size:12px;">${status}</td>
     </tr>`;
   }).join('');
 
@@ -687,16 +746,42 @@ function render(d) {
   let html = '';
 
   // GO signals
-  const gos = d.go_signals || [];
+  const gos     = d.go_signals    || [];
+  const watches = d.watch_signals || [];
+
+  // Also derive OVERCOOKED from all_results for display
+  const overcookedTickers = (d.all_results || [])
+    .filter(r => r.has_0dte && (r.tier || r.go_nogo.split(' ')[0]) === 'OVERCOOKED');
+
   if (gos.length) {
-    html += `<div class="section-label">GO Signals (${gos.length})</div>`;
+    html += `<div class="section-label">🟢 GO Signals (${gos.length})</div>`;
     html += gos.map(renderCard).join('');
   } else {
     html += `
     <div class="no-go-card">
       <div class="icon">📊</div>
       <h2>No GO Signals This Scan</h2>
-      <p>All signals below conviction threshold (7.0) or mixed direction. Check back at open or run a new scan.</p>
+      <p>Conviction 7.0–8.0 required. Check WATCH list below for near-miss setups.</p>
+    </div>`;
+  }
+
+  // WATCH cards
+  if (watches.length) {
+    html += `<div class="section-label" style="color:#c88000;border-color:#c88000;">👀 Watch List (${watches.length}) — Below GO threshold, monitor only</div>`;
+    html += watches.map(r => renderWatchCard(r)).join('');
+  }
+
+  // OVERCOOKED compact table
+  if (overcookedTickers.length) {
+    const rows = overcookedTickers.map(r =>
+      `<tr><td style="font-weight:700">${r.ticker}</td>`
+      + `<td style="color:${r.direction==='CALL'?'#1a7a1a':'#9C0006'}">${r.direction}</td>`
+      + `<td style="font-weight:700;color:#8B4513">${r.conviction}/10</td>`
+      + `<td style="font-size:11px;color:var(--muted)">Over-signaled >8.0 — likely chasing</td></tr>`
+    ).join('');
+    html += `<div class="section-label" style="color:#8B4513;border-color:#8B4513;">🔥 Overcooked (${overcookedTickers.length}) — Over-signaled, pass</div>`;
+    html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;">
+      <table class="results-table"><tr><th>Ticker</th><th>Dir</th><th>Conv</th><th>Note</th></tr>${rows}</table>
     </div>`;
   }
 

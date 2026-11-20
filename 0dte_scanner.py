@@ -772,22 +772,45 @@ def build_recommendation(tech, cross, sectors, sentiment, cat_score, analyst_net
     # Dead tape: RVOL below 0.5 — no volume, avoid theta bleed
     dead_tape = (rvol is not None and rvol < 0.5)
 
-    # ── GO / NO TRADE ────────────────────────────────────────────────────────
+    # ── FOUR-TIER CLASSIFICATION ─────────────────────────────────────────────
+    # GO:         7.0–8.0, all gates pass          → trade it
+    # WATCH:      5.5–7.0, direction assigned       → your call
+    # OVERCOOKED: >8.0, over-signaled              → pass, likely chasing
+    # NO TRADE:   <5.5, vetoed, or no direction    → pass
     go_threshold = _GO_THRESHOLD_PUT if direction == "PUT" else _GO_THRESHOLD_CALL
+    hard_vetoed  = (earnings_veto or tape_contradiction or blown_out_range
+                    or dead_tape or fomc_day or vix_ts_block)
+
     is_go = (direction != "NO TRADE" and vix_ok
              and go_threshold <= conviction <= _GO_CONVICTION_MAX
-             and gate_pass and not yield_veto
-             and not vix_ts_block and not earnings_veto
-             and not tape_contradiction and not blown_out_range
-             and not dead_tape and not fomc_day)
+             and gate_pass and not yield_veto and not hard_vetoed)
 
+    is_overcooked = (direction != "NO TRADE" and conviction > _GO_CONVICTION_MAX
+                     and not hard_vetoed)
+
+    is_watch = (not is_go and not is_overcooked
+                and direction != "NO TRADE"
+                and conviction >= 5.5
+                and not hard_vetoed)
+
+    # Build tier label
     star = " ⭐ SUPER FILTER" if (is_go and super_filter) else ""
-    go_nogo = f"GO{star}" if is_go else "NO TRADE"
+    if is_go:
+        tier = f"GO{star}"
+    elif is_overcooked:
+        tier = "OVERCOOKED"
+    elif is_watch:
+        tier = "WATCH"
+    else:
+        tier = "NO TRADE"
+
+    # Append veto/warning flags
+    go_nogo = tier
     if mixed:
         go_nogo += " ⚠️ MIXED SIGNALS"
     if not vix_ok:
         go_nogo += f" ⚠️ VIX {regime} REGIME BLOCK"
-    if not gate_pass and direction != "NO TRADE":
+    if not gate_pass and direction != "NO TRADE" and not is_go:
         go_nogo += " ⚠️ GATE FAIL"
     if yield_veto:
         go_nogo += " ⚠️ YIELD VETO"
@@ -1191,12 +1214,19 @@ def format_multi_html(results, market_tech, cross, sectors):
     today_str = datetime.now().strftime("%A, %B %d, %Y")
     run_time  = datetime.now().strftime("%I:%M %p CT")
 
-    go_results    = [r for r in results if r.get("has_0dte") and r["go_nogo"] == "GO"]
-    no_results    = [r for r in results if r.get("has_0dte") and r["go_nogo"] != "GO"]
-    no_expiry     = [r for r in results if not r.get("has_0dte")]
+    go_results        = [r for r in results if r.get("has_0dte") and r["go_nogo"].startswith("GO")]
+    watch_results     = [r for r in results if r.get("has_0dte") and r["go_nogo"].startswith("WATCH")]
+    overcooked_results= [r for r in results if r.get("has_0dte") and r["go_nogo"].startswith("OVERCOOKED")]
+    no_results        = [r for r in results if r.get("has_0dte")
+                         and not r["go_nogo"].startswith("GO")
+                         and not r["go_nogo"].startswith("WATCH")
+                         and not r["go_nogo"].startswith("OVERCOOKED")]
+    no_expiry         = [r for r in results if not r.get("has_0dte")]
 
-    # Sort GO by conviction desc
+    # Sort GO and WATCH by conviction desc
     go_results.sort(key=lambda r: r["conviction"], reverse=True)
+    watch_results.sort(key=lambda r: r["conviction"], reverse=True)
+    overcooked_results.sort(key=lambda r: r["conviction"], reverse=True)
 
     # ── Market overview strip ─────────────────────────────────────────────
     vix     = market_tech.get("vix", "—")
@@ -1331,6 +1361,99 @@ def format_multi_html(results, market_tech, cross, sectors):
     </div>
   </div>"""
 
+    # ── WATCH ticker cards (amber) ────────────────────────────────────────
+    watch_cards = ""
+    for r in watch_results:
+        ticker    = r["ticker"]
+        direction = r["direction"]
+        conviction= r["conviction"]
+        chain     = r.get("chain", [])
+        exp_date  = r.get("exp_date", "Today")
+        tech      = r.get("tech", {})
+        price     = tech.get("tk_price", tech.get("spy_price", 0))
+        intraday  = tech.get("tk_intraday")
+        premkt    = tech.get("tk_premkt", tech.get("spy_premkt", 0))
+        move      = intraday if intraday is not None else premkt
+        move_lbl  = "intra" if intraday is not None else "pm"
+        sentiment = r.get("sentiment", "NEUTRAL")
+        signals   = r.get("signals", [])
+        dir_icon  = "&#x25B2;" if direction == "CALL" else "&#x25BC;"
+        m_col     = POS if move >= 0 else NEG
+
+        # Signal rows
+        sig_pairs = []
+        for i in range(0, len(signals), 2):
+            left  = signals[i]
+            right = signals[i+1] if i+1 < len(signals) else None
+            l_col = POS if left[2] > 0 else (NEG if left[2] < 0 else "#888")
+            l_arr = "&#x25B2;" if left[2] > 0 else ("&#x25BC;" if left[2] < 0 else "&mdash;")
+            row = (f'<tr>'
+                   f'<td style="padding:4px 8px;font-size:12px;color:#555;">{left[0]}</td>'
+                   f'<td style="padding:4px 8px;font-size:12px;">{left[1]}</td>'
+                   f'<td style="padding:4px 8px;font-size:12px;color:{l_col};font-weight:bold;">{l_arr}</td>')
+            if right:
+                r_col = POS if right[2] > 0 else (NEG if right[2] < 0 else "#888")
+                r_arr = "&#x25B2;" if right[2] > 0 else ("&#x25BC;" if right[2] < 0 else "&mdash;")
+                row += (f'<td style="padding:4px 8px;font-size:12px;color:#555;border-left:1px solid #eee;">{right[0]}</td>'
+                        f'<td style="padding:4px 8px;font-size:12px;">{right[1]}</td>'
+                        f'<td style="padding:4px 8px;font-size:12px;color:{r_col};font-weight:bold;">{r_arr}</td>')
+            else:
+                row += '<td colspan="3"></td>'
+            row += '</tr>'
+            sig_pairs.append(row)
+
+        # Show best chain strike/mid as reference (no full ATP block)
+        chain_ref = ""
+        if chain:
+            best = chain[0]
+            mid  = round((best.get("bid", 0) + best.get("ask", 0)) / 2, 2)
+            cost = round(mid * 100, 2)
+            chain_ref = (f'<div style="background:#fffbea;padding:8px 14px;border-top:2px solid #e6a800;'
+                         f'font-size:12px;color:#7a5500;">'
+                         f'&#x1F440; If triggered: ${best["strike"]:.0f} {direction} @ ~${mid:.2f} mid '
+                         f'(~${cost:.0f}/contract) &nbsp;&mdash;&nbsp; {exp_date}</div>')
+
+        watch_cards += f"""
+  <div style="border:2px solid #c88000;border-radius:6px;margin:0 28px 16px;overflow:hidden;">
+    <div style="background:#c88000;padding:12px 16px;">
+      <span style="color:#fff;font-size:15px;font-weight:bold;">
+        &#x1F440; {dir_icon} {ticker} &mdash; WATCH {direction}</span>
+      <span style="float:right;color:rgba(255,255,255,0.85);font-size:13px;">
+        Conviction: {conviction}/10</span>
+    </div>
+    <div style="padding:8px 14px;background:#fffbea;font-size:12px;color:#555;">
+      Price: <strong>${price:.2f}</strong> &nbsp;
+      Move: <strong style="color:{m_col};">{move:+.2f}% {move_lbl}</strong> &nbsp;
+      News: <strong>{sentiment}</strong>
+    </div>
+    <div style="padding:6px 14px;background:#fff9e0;font-size:11px;color:#9a6600;
+      font-style:italic;border-top:1px solid #f5d47a;">
+      &#x26A0;&#xFE0F; Below GO threshold (5.5–7.0). Monitor — do NOT auto-enter.
+    </div>
+    {chain_ref}
+    <div style="padding:10px 14px;">
+      <table style="width:100%;border-collapse:collapse;">{''.join(sig_pairs)}</table>
+    </div>
+  </div>"""
+
+    # ── OVERCOOKED tickers ────────────────────────────────────────────────
+    overcooked_rows = ""
+    for r in overcooked_results:
+        ticker    = r["ticker"]
+        conviction= r["conviction"]
+        direction = r["direction"]
+        tech      = r.get("tech", {})
+        intraday  = tech.get("tk_intraday")
+        premkt    = tech.get("tk_premkt", tech.get("spy_premkt", 0))
+        move      = intraday if intraday is not None else premkt
+        p_col     = POS if move >= 0 else NEG
+        move_lbl  = f"{move:+.2f}% {'intra' if intraday is not None else 'pm'}"
+        overcooked_rows += (f'<tr><td style="padding:6px 10px;font-weight:bold;">{ticker}</td>'
+                            f'<td style="padding:6px 10px;">{direction}</td>'
+                            f'<td style="padding:6px 10px;">{conviction}/10</td>'
+                            f'<td style="padding:6px 10px;color:{p_col};">{move_lbl}</td>'
+                            f'<td style="padding:6px 10px;font-size:11px;color:#888;">Over-signaled — likely chasing</td></tr>')
+
     # ── NO TRADE tickers ─────────────────────────────────────────────────
     no_rows = ""
     for r in no_results:
@@ -1359,9 +1482,44 @@ def format_multi_html(results, market_tech, cross, sectors):
         no_expiry_text = (f'<div style="padding:8px 28px;font-size:12px;color:#888;">'
                           f'No 0DTE options today: {names}</div>')
 
-    go_count = len(go_results)
-    scan_count = len([r for r in results if r.get("has_0dte")])
-    summary_col = POS if go_count > 0 else "#888"
+    go_count    = len(go_results)
+    watch_count = len(watch_results)
+    over_count  = len(overcooked_results)
+    scan_count  = len([r for r in results if r.get("has_0dte")])
+    summary_col = POS if go_count > 0 else ("#c88000" if watch_count > 0 else "#888")
+
+    # WATCH section block
+    watch_section = ""
+    if watch_cards:
+        watch_section = f"""
+  <div style="padding:16px 28px 8px;">
+    <div style="font-size:13px;font-weight:bold;color:#c88000;text-transform:uppercase;
+      letter-spacing:1px;border-bottom:2px solid #c88000;padding-bottom:6px;margin-bottom:14px;">
+      &#x1F440; Watch List ({watch_count})</div>
+  </div>
+  <div style="padding:0 0 4px;background:#fffdf0;">
+    {watch_cards}
+  </div>"""
+
+    # OVERCOOKED section block
+    overcooked_section = ""
+    if overcooked_rows:
+        overcooked_section = f"""
+  <div style="padding:16px 28px 8px;">
+    <div style="font-size:13px;font-weight:bold;color:#8B4513;text-transform:uppercase;
+      letter-spacing:1px;border-bottom:2px solid #8B4513;padding-bottom:6px;margin-bottom:14px;">
+      &#x1F525; Overcooked ({over_count}) — Over-signaled, likely chasing</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr style="background:#f5deb3;">
+        <td style="padding:7px 10px;font-weight:bold;">Ticker</td>
+        <td style="padding:7px 10px;font-weight:bold;">Direction</td>
+        <td style="padding:7px 10px;font-weight:bold;">Conviction</td>
+        <td style="padding:7px 10px;font-weight:bold;">Move</td>
+        <td style="padding:7px 10px;font-weight:bold;">Note</td>
+      </tr>
+      {overcooked_rows}
+    </table>
+  </div>"""
 
     return f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
@@ -1375,7 +1533,9 @@ def format_multi_html(results, market_tech, cross, sectors):
     <div style="color:#DCE6F1;font-size:13px;margin-top:4px;">{today_str}</div>
     <div style="color:#9ab5cc;font-size:11px;margin-top:2px;">Generated {run_time}
       &nbsp;&mdash;&nbsp; {scan_count} tickers with 0DTE options
-      &nbsp;&mdash;&nbsp; <span style="color:{summary_col};font-weight:bold;">{go_count} GO signal{'s' if go_count != 1 else ''}</span>
+      &nbsp;&mdash;&nbsp; <span style="color:{summary_col};font-weight:bold;">{go_count} GO</span>
+      &nbsp;/&nbsp; <span style="color:#c88000;">{watch_count} Watch</span>
+      &nbsp;/&nbsp; <span style="color:#8B4513;">{over_count} Overcooked</span>
     </div>
   </div>
 
@@ -1387,7 +1547,11 @@ def format_multi_html(results, market_tech, cross, sectors):
     {_sec("GO Signals" if go_count > 0 else "No GO Signals Today")}
   </div>
 
-  {'<div style="padding:8px 28px 4px;font-size:13px;color:#888;">No GO signals this scan. All signals below conviction threshold or mixed direction.</div>' if go_count == 0 else go_cards}
+  {'<div style="padding:8px 28px 4px;font-size:13px;color:#888;">No GO signals this scan.</div>' if go_count == 0 else go_cards}
+
+  {watch_section}
+
+  {overcooked_section}
 
   {'<div style="padding:16px 28px 8px;"><div style="font-size:13px;font-weight:bold;color:' + NAV + ';text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid ' + NAV + ';padding-bottom:6px;margin-bottom:14px;">No Trade</div><table style="width:100%;border-collapse:collapse;font-size:13px;"><tr style="background:#DCE6F1;"><td style="padding:7px 10px;font-weight:bold;">Ticker</td><td style="padding:7px 10px;font-weight:bold;">Direction</td><td style="padding:7px 10px;font-weight:bold;">Conviction</td><td style="padding:7px 10px;font-weight:bold;">Move</td><td style="padding:7px 10px;font-weight:bold;">Blocked By</td></tr>' + no_rows + '</table></div>' if no_rows else ''}
 
@@ -1402,51 +1566,61 @@ def format_multi_html(results, market_tech, cross, sectors):
 # ── JSON SNAPSHOT ─────────────────────────────────────────────────────────
 def write_json_snapshot(results, market_tech, cross, sectors, catalysts):
     import json
-    go_results = [r for r in results if r.get("has_0dte") and "GO" in r.get("go_nogo", "")]
+    go_results    = [r for r in results if r.get("has_0dte") and r.get("go_nogo", "").startswith("GO")]
+    watch_results = [r for r in results if r.get("has_0dte") and r.get("go_nogo", "").startswith("WATCH")]
     go_results.sort(key=lambda r: r["conviction"], reverse=True)
+    watch_results.sort(key=lambda r: r["conviction"], reverse=True)
 
-    go_signals = []
-    for r in go_results:
-        chain    = r.get("chain", [])
-        best_rec = None
-        if chain:
-            best = chain[0]
-            mid  = round((best.get("bid", 0) + best.get("ask", 0)) / 2, 2)
-            cost = round(mid * 100, 2)
-            best_rec = {
-                "strike":            best["strike"],
-                "direction":         r["direction"],
-                "limit":             mid,
-                "cost_per_contract": cost,
-                "stop":              round(mid * 0.50, 2),
-                "target_50":         round(mid * 1.50, 2),
-                "target_100":        round(mid * 2.00, 2),
-            }
-        tech = r.get("tech", {})
-        go_signals.append({
-            "ticker":     r["ticker"],
-            "direction":  r["direction"],
-            "conviction": r["conviction"],
-            "go_nogo":    r["go_nogo"],
-            "price":      tech.get("tk_price", tech.get("spy_price", 0)),
-            "premkt":     tech.get("tk_premkt", tech.get("spy_premkt", 0)),
-            "exp_date":   r.get("exp_date"),
-            "signals":    [{"label": s[0], "value": s[1], "vote": s[2]} for s in r.get("signals", [])],
-            "chain":      [{
-                "strike":        row["strike"],
-                "lastPrice":     row.get("lastPrice", 0),
-                "bid":           row.get("bid", 0),
-                "ask":           row.get("ask", 0),
-                "volume":        int(row.get("volume", 0) or 0),
-                "openInterest":  int(row.get("openInterest", 0) or 0),
-                "iv":            round(row.get("impliedVolatility", 0) * 100, 1) if row.get("impliedVolatility") else None,
-            } for row in chain],
-            "recommended": best_rec,
-        })
+    def _build_signal_list(result_list):
+        out = []
+        for r in result_list:
+            chain    = r.get("chain", [])
+            best_rec = None
+            if chain:
+                best = chain[0]
+                mid  = round((best.get("bid", 0) + best.get("ask", 0)) / 2, 2)
+                cost = round(mid * 100, 2)
+                best_rec = {
+                    "strike":            best["strike"],
+                    "direction":         r["direction"],
+                    "limit":             mid,
+                    "cost_per_contract": cost,
+                    "stop":              round(mid * 0.50, 2),
+                    "target_50":         round(mid * 1.50, 2),
+                    "target_100":        round(mid * 2.00, 2),
+                }
+            tech = r.get("tech", {})
+            out.append({
+                "ticker":     r["ticker"],
+                "direction":  r["direction"],
+                "conviction": r["conviction"],
+                "tier":       r["go_nogo"].split()[0],
+                "go_nogo":    r["go_nogo"],
+                "price":      tech.get("tk_price", tech.get("spy_price", 0)),
+                "premkt":     tech.get("tk_premkt", tech.get("spy_premkt", 0)),
+                "intraday":   tech.get("tk_intraday"),
+                "exp_date":   r.get("exp_date"),
+                "signals":    [{"label": s[0], "value": s[1], "vote": s[2]} for s in r.get("signals", [])],
+                "chain":      [{
+                    "strike":        row["strike"],
+                    "lastPrice":     row.get("lastPrice", 0),
+                    "bid":           row.get("bid", 0),
+                    "ask":           row.get("ask", 0),
+                    "volume":        int(row.get("volume", 0) or 0),
+                    "openInterest":  int(row.get("openInterest", 0) or 0),
+                    "iv":            round(row.get("impliedVolatility", 0) * 100, 1) if row.get("impliedVolatility") else None,
+                } for row in chain],
+                "recommended": best_rec,
+            })
+        return out
+
+    go_signals    = _build_signal_list(go_results)
+    watch_signals = _build_signal_list(watch_results)
 
     snapshot = {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "go_count":     len(go_signals),
+        "generated_at":  datetime.now().isoformat(timespec="seconds"),
+        "go_count":      len(go_signals),
+        "watch_count":   len(watch_signals),
         "market": {
             "vix":           market_tech.get("vix"),
             "vix_chg":       market_tech.get("vix_chg", 0),
@@ -1459,12 +1633,14 @@ def write_json_snapshot(results, market_tech, cross, sectors, catalysts):
         "cross":       cross,
         "sectors":     sectors,
         "catalysts":   catalysts,
-        "go_signals":  go_signals,
+        "go_signals":    go_signals,
+        "watch_signals": watch_signals,
         "all_results": [
             {
                 "ticker":     r["ticker"],
                 "direction":  r.get("direction", "—"),
                 "conviction": r.get("conviction", 0),
+                "tier":       r.get("go_nogo", "—").split()[0],
                 "go_nogo":    r.get("go_nogo", "—"),
                 "has_0dte":   r.get("has_0dte", False),
             }
