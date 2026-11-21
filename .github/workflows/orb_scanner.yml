@@ -1,0 +1,28 @@
+name: ORB Pre-Market Scanner
+
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'   # 8:00 AM CST (14:00 UTC) Mon-Fri
+  workflow_dispatch:           # manual trigger button on GitHub
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install --quiet yfinance pandas numpy
+
+      - name: Run ORB scanner
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python3 orb_scanner.py --email
