@@ -55,10 +55,6 @@ WATCHLIST = {
     'MSTR':  'MicroStrategy',
     'ARM':   'Arm Holdings',
     'HOOD':  'Robinhood',
-    # ETFs — daily expirations, tightest spreads
-    'SPY':   'S&P 500 ETF',
-    'QQQ':   'Nasdaq 100 ETF',
-    'IWM':   'Russell 2000 ETF',
 }
 
 # ── Earnings Check ───────────────────────────────────────────
