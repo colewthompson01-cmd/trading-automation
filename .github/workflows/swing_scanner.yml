@@ -1,0 +1,41 @@
+name: Weekly Swing Scanner
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # Sunday 6:00 PM CST (Monday 00:00 UTC)
+  workflow_dispatch:        # manual trigger button on GitHub
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet \
+            yfinance pandas numpy
+
+      - name: Run swing scanner
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python3 swing_scanner.py --email
+
+      - name: Publish scan results
+        run: |
+          git config user.name  "Swing Scanner Bot"
+          git config user.email "noreply@github.com"
+          git add latest_swing_scan.json swing_positions.json || true
+          git diff --staged --quiet || git commit -m "chore: update swing scan results [skip ci]"
+          git push
