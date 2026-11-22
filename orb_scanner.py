@@ -28,34 +28,47 @@ import numpy as np
 GMAIL_USER  = "cwthompsonusa@gmail.com"
 GMAIL_TO    = "cwthompsonusa@gmail.com"
 
-MIN_GAP_PCT       = 2.0    # minimum pre-market gap to flag (%)
+MIN_GAP_PCT       = 3.0    # backtest shows 2-3% gaps are noise — 3%+ only
 MAX_GAP_PCT       = 12.0   # skip if gapped too far (chasing risk)
-MIN_PM_VOL_RATIO  = 0.15   # pre-market vol must be >15% of avg daily vol
 EARNINGS_BUFFER   = 5      # skip if earnings within this many days
 MIN_OI            = 100    # minimum ATM 0DTE open interest
 MAX_SPREAD_PCT    = 0.25   # max bid/ask spread as % of midpoint (skipped pre-mkt)
+VIX_MIN           = 15.0   # skip low-VIX days (calm market = 44% win rate)
+VIX_MAX           = 25.0   # skip high-VIX days (too choppy = 44% win rate)
+                            # sweet spot: VIX 15-25 → 80% win rate in backtest
 
-# Fixed universe — only names with daily or frequent 0DTE expirations
-# and enough options volume to get a clean fill
+# Refined universe — 2-year backtest: ARM 87.5%, HOOD 83.3%, AMD 80%, COIN 75%, MSTR 60%
+# Dropped: NVDA/TSLA/AAPL/AMZN/MSFT/META/GOOGL/NFLX/PLTR/CRWD (sub-50% win rates)
 WATCHLIST = {
-    # Individual stocks — daily expirations
-    'NVDA':  'NVIDIA',
-    'TSLA':  'Tesla',
-    'AAPL':  'Apple',
-    'AMZN':  'Amazon',
-    'MSFT':  'Microsoft',
-    'META':  'Meta',
-    # Individual stocks — M/W/F or frequent
-    'GOOGL': 'Alphabet',
-    'AMD':   'AMD',
-    'NFLX':  'Netflix',
-    'PLTR':  'Palantir',
-    'CRWD':  'CrowdStrike',
-    'COIN':  'Coinbase',
-    'MSTR':  'MicroStrategy',
-    'ARM':   'Arm Holdings',
-    'HOOD':  'Robinhood',
+    'ARM':  'Arm Holdings',
+    'COIN': 'Coinbase',
+    'AMD':  'AMD',
+    'MSTR': 'MicroStrategy',
+    'HOOD': 'Robinhood',
 }
+
+# ── VIX Regime Check ─────────────────────────────────────────
+
+def get_vix_regime():
+    """
+    Fetch prior-day VIX close. Returns (vix_val, regime, ok).
+    regime: 'low' (<15), 'medium' (15-25), 'high' (>25)
+    ok: True only in medium regime (15-25) — backtest sweet spot
+    """
+    try:
+        df = yf.Ticker('^VIX').history(period='5d', interval='1d')
+        if df.empty:
+            return None, 'unknown', True  # no data — allow through
+        vix_val = float(df['Close'].iloc[-1])
+        if vix_val < VIX_MIN:
+            return vix_val, 'low', False
+        elif vix_val <= VIX_MAX:
+            return vix_val, 'medium', True
+        else:
+            return vix_val, 'high', False
+    except Exception:
+        return None, 'unknown', True  # fail open
+
 
 # ── Earnings Check ───────────────────────────────────────────
 
@@ -171,6 +184,11 @@ def check_0dte_liquidity(ticker, price, direction):
 def scan_ticker(ticker, name):
     """Returns candidate dict or None."""
     try:
+        # ── Monday filter ─────────────────────────────────────
+        if datetime.now().weekday() == 0:
+            print(f'    {ticker:6} SKIP — Monday (weekend gaps fade)')
+            return None
+
         info = yf.Ticker(ticker).info
 
         # ── Earnings check ────────────────────────────────────
@@ -189,15 +207,15 @@ def scan_ticker(ticker, name):
         abs_gap = abs(gap_pct)
 
         if abs_gap < MIN_GAP_PCT:
-            print(f'    {ticker:6} SKIP — gap {gap_pct:+.1f}% below threshold')
+            print(f'    {ticker:6} SKIP — gap {gap_pct:+.1f}% below 3% threshold')
             return None
 
         if abs_gap > MAX_GAP_PCT:
             print(f'    {ticker:6} SKIP — gap {gap_pct:+.1f}% too extended to chase')
             return None
 
-        if vol_ratio < MIN_PM_VOL_RATIO:
-            print(f'    {ticker:6} SKIP — pre-mkt vol ratio {vol_ratio:.2f} too thin')
+        if direction != 'UP':
+            print(f'    {ticker:6} SKIP — DOWN gap (backtest: 44% win vs 70% UP)')
             return None
 
         # ── Options liquidity ─────────────────────────────────
@@ -324,7 +342,8 @@ def build_html(candidates):
     <div style="font-size:13px;color:#ccc">{now}</div>
     <div style="margin-top:12px;font-size:12px;color:#aaa;line-height:1.6">
       Watch the first 5-min candle at open (9:30 ET). Enter on breakout of opening range.
-      These names cleared: gap &gt;2% · volume confirmed · earnings safe · 0DTE liquid.
+      These names cleared: UP gap ≥3% · earnings safe · VIX 15–25 · not Monday · 0DTE liquid.
+      Backtest (2yr): 70% win rate · +29% avg option return at 11:00 ET exit.
     </div>
   </div>
 
@@ -333,9 +352,9 @@ def build_html(candidates):
 
     <div style="margin-top:20px;padding:12px;background:#fff8e1;border-left:3px solid #c88000;
          border-radius:4px;font-size:12px;color:#555;line-height:1.6">
-      <b>ORB Rules:</b> Enter only on a clean 5-min candle break with volume.
-      Do not chase a gap already running 10%+. Exit by 11:00 AM CT — theta accelerates after that.
-      Stop = 50% of premium paid. No averaging down on 0DTE.
+      <b>ORB Rules:</b> Enter CALL only on a clean UP 5-min candle break at 9:35 ET.
+      Do not chase gaps already running 10%+. Exit at 11:00 AM ET sharp — backtest peak.
+      Stop = 50% of premium paid. No averaging down on 0DTE. No trades on Mondays.
     </div>
 
     <div style="margin-top:12px;font-size:11px;color:#aaa;text-align:center">
@@ -375,6 +394,29 @@ def main():
     print('  ORB SCANNER — Pre-Market Watchlist')
     print(f'  {datetime.now().strftime("%Y-%m-%d %H:%M")}')
     print('=' * 58)
+
+    # ── Monday check ──────────────────────────────────────────
+    if datetime.now().weekday() == 0:
+        print('\n  Monday — ORB scanner skipped (weekend gap fade risk)')
+        if send:
+            send_email(build_html([]), 0)
+        return
+
+    # ── VIX regime check ──────────────────────────────────────
+    vix_val, vix_regime, vix_ok = get_vix_regime()
+    if vix_val is not None:
+        print(f'\n  VIX: {vix_val:.1f} ({vix_regime})', end='')
+        if not vix_ok:
+            regime_msg = 'too low — calm markets kill ORB edge' if vix_regime == 'low' \
+                         else 'too high — fear-driven chop'
+            print(f' — SKIP: {regime_msg}')
+            if send:
+                send_email(build_html([]), 0)
+            return
+        print(f' — in sweet spot (15–25), scanning...')
+    else:
+        print('\n  VIX: unavailable — proceeding anyway')
+
     print(f'\nScanning {len(WATCHLIST)} tickers...\n')
 
     candidates = []
