@@ -1,48 +1,49 @@
 {
-  "generated_at": "2026-11-24T15:45:17",
+  "generated_at": "2026-11-24T16:35:02",
   "go_count": 0,
   "watch_count": 0,
   "market": {
-    "vix": 28.67,
-    "vix_chg": 2.05,
-    "futures_pct": -0.78,
-    "futures_price": 7197.8,
-    "spy_price": 713.23,
-    "spy_premkt": -1.25,
-    "spy_rsi": 34.9
+    "vix": 28.92,
+    "vix_chg": 2.3,
+    "futures_pct": -0.85,
+    "futures_price": 7192.5,
+    "spy_price": 715.09,
+    "spy_premkt": -1.0,
+    "spy_rsi": 35.3
   },
   "cross": {
     "10Y Yield": {
-      "price": 4.9,
-      "pct": -0.33
+      "price": 4.88,
+      "pct": -0.69
     },
     "DXY": {
-      "price": 103.82,
-      "pct": -0.47
+      "price": 103.79,
+      "pct": -0.51
     },
     "Oil (WTI)": {
-      "price": 80.58,
-      "pct": 0.51
+      "price": 80.62,
+      "pct": 0.56
     },
     "Gold": {
-      "price": 3593.3,
-      "pct": -1.59
+      "price": 3569.5,
+      "pct": -2.24
     },
     "Bitcoin": {
-      "price": 59608.84,
-      "pct": -2.62
+      "price": 59458.36,
+      "pct": -2.86
     }
   },
   "sectors": {
-    "Tech": -4.27,
-    "Financials": 0.36,
-    "Energy": 0.4,
-    "Healthcare": 2.36,
-    "Comms": 0.48,
-    "Industrials": -1.5
+    "Tech": -4.11,
+    "Financials": 0.57,
+    "Energy": 0.97,
+    "Healthcare": 2.66,
+    "Comms": 0.89,
+    "Industrials": -1.19
   },
   "catalysts": [
-    "CPI inflation data"
+    "Fed rate decision / FOMC",
+    "Jobs / unemployment data"
   ],
   "go_signals": [],
   "watch_signals": [],
@@ -114,7 +115,7 @@
     {
       "ticker": "QQQ",
       "direction": "NO TRADE",
-      "conviction": 2.6,
+      "conviction": 2.3,
       "tier": "NO",
       "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
