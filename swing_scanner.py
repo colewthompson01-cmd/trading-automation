@@ -124,6 +124,9 @@ def score_ticker(ticker, spy_returns):
         hist = yf.Ticker(ticker).history(period='2y')
         if hist.empty or len(hist) < 210:
             return None
+        hist = hist.dropna(subset=['Close','Volume','High','Low'])
+        if len(hist) < 210:
+            return None
 
         c   = hist['Close']
         v   = hist['Volume']
@@ -557,6 +560,7 @@ def main():
     print('\n[1] Fetching SPY baseline...')
     try:
         spy_hist = yf.Ticker('SPY').history(period='2y')
+        spy_hist = spy_hist[['Close']].dropna()
         spy_6m   = float(spy_hist['Close'].iloc[-1] / spy_hist['Close'].iloc[-126] - 1) if len(spy_hist) >= 126 else 0
         spy_1y   = float(spy_hist['Close'].iloc[-1] / spy_hist['Close'].iloc[-252] - 1) if len(spy_hist) >= 252 else 0
         spy_returns = {'6m': spy_6m, '1y': spy_1y}
