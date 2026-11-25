@@ -1,62 +1,190 @@
 {
-  "generated_at": "2026-11-25T15:42:48",
+  "generated_at": "2026-11-25T16:34:58",
   "go_count": 0,
-  "watch_count": 0,
+  "watch_count": 1,
   "market": {
-    "vix": 33.99,
-    "vix_chg": 7.63,
-    "futures_pct": -2.68,
-    "futures_price": 7024.2,
-    "spy_price": 699.97,
-    "spy_premkt": -2.62,
-    "spy_rsi": 39.4
+    "vix": 33.87,
+    "vix_chg": 7.51,
+    "futures_pct": -2.61,
+    "futures_price": 7029.2,
+    "spy_price": 698.9,
+    "spy_premkt": -2.77,
+    "spy_rsi": 39.2
   },
   "cross": {
     "10Y Yield": {
-      "price": 4.82,
-      "pct": -1.71
+      "price": 4.81,
+      "pct": -1.98
     },
     "DXY": {
-      "price": 103.97,
-      "pct": 0.16
+      "price": 103.94,
+      "pct": 0.13
     },
     "Oil (WTI)": {
-      "price": 83.04,
-      "pct": 1.21
+      "price": 83.43,
+      "pct": 1.68
     },
     "Gold": {
-      "price": 3473.2,
-      "pct": -2.49
+      "price": 3486.4,
+      "pct": -2.12
     },
     "Bitcoin": {
-      "price": 58263.49,
-      "pct": -2.48
+      "price": 58573.75,
+      "pct": -1.96
     }
   },
   "sectors": {
-    "Tech": -4.8,
-    "Financials": -0.93,
-    "Energy": 0.15,
-    "Healthcare": -1.07,
-    "Comms": -1.92,
-    "Industrials": -1.29
+    "Tech": -5.14,
+    "Financials": -0.94,
+    "Energy": -0.43,
+    "Healthcare": -1.37,
+    "Comms": -1.72,
+    "Industrials": -1.68
   },
-  "catalysts": [],
+  "catalysts": [
+    "Jobs / unemployment data"
+  ],
   "go_signals": [],
-  "watch_signals": [],
+  "watch_signals": [
+    {
+      "ticker": "MU",
+      "direction": "PUT",
+      "conviction": 5.6,
+      "tier": "WATCH",
+      "go_nogo": "WATCH \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "price": 553.47,
+      "premkt": -8.71,
+      "intraday": -3.73,
+      "exp_date": "2026-11-25",
+      "signals": [
+        {
+          "label": "S&P Futures",
+          "value": "-2.61%",
+          "vote": -1
+        },
+        {
+          "label": "Intraday Move",
+          "value": "-3.73%",
+          "vote": -1
+        },
+        {
+          "label": "VIX Direction",
+          "value": "+7.51",
+          "vote": -1
+        },
+        {
+          "label": "10Y Yield",
+          "value": "-1.98%",
+          "vote": 1
+        },
+        {
+          "label": "DXY",
+          "value": "+0.13%",
+          "vote": 0
+        },
+        {
+          "label": "News Sentiment",
+          "value": "NEUTRAL",
+          "vote": 0
+        },
+        {
+          "label": "Sector Pulse",
+          "value": "0 up / 6 dn",
+          "vote": -1
+        },
+        {
+          "label": "RSI (14)",
+          "value": "42.1",
+          "vote": 1
+        },
+        {
+          "label": "BB %B",
+          "value": "0.02",
+          "vote": 1
+        },
+        {
+          "label": "VIX IVR",
+          "value": "91th pctile",
+          "vote": -1
+        },
+        {
+          "label": "Put/Call Ratio",
+          "value": "1.37",
+          "vote": -1
+        },
+        {
+          "label": "Gap ATR",
+          "value": "-0.73x ATR",
+          "vote": -1
+        },
+        {
+          "label": "Trend Regime",
+          "value": "Bearish",
+          "vote": -1
+        }
+      ],
+      "chain": [
+        {
+          "strike": 552.5,
+          "lastPrice": 6.69,
+          "bid": 6.55,
+          "ask": 6.65,
+          "volume": 2776,
+          "openInterest": 592,
+          "iv": 60.9
+        },
+        {
+          "strike": 550.0,
+          "lastPrice": 5.35,
+          "bid": 5.35,
+          "ask": 5.5,
+          "volume": 14444,
+          "openInterest": 1340,
+          "iv": 60.6
+        },
+        {
+          "strike": 547.5,
+          "lastPrice": 4.7,
+          "bid": 4.85,
+          "ask": 5.0,
+          "volume": 2301,
+          "openInterest": 82,
+          "iv": 65.3
+        },
+        {
+          "strike": 545.0,
+          "lastPrice": 4.0,
+          "bid": 3.85,
+          "ask": 4.0,
+          "volume": 3390,
+          "openInterest": 265,
+          "iv": 64.3
+        }
+      ],
+      "recommended": {
+        "strike": 552.5,
+        "direction": "PUT",
+        "limit": 6.6,
+        "cost_per_contract": 660.0,
+        "stop": 3.3,
+        "target_50": 9.9,
+        "target_100": 13.2
+      }
+    }
+  ],
   "all_results": [
     {
       "ticker": "NVDA",
       "direction": "PUT",
-      "conviction": 3.8,
+      "conviction": 5.0,
       "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
     },
     {
       "ticker": "TSLA",
       "direction": "PUT",
-      "conviction": 2.6,
+      "conviction": 4.4,
       "tier": "NO",
       "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
@@ -64,7 +192,7 @@
     {
       "ticker": "META",
       "direction": "PUT",
-      "conviction": 2.1,
+      "conviction": 3.8,
       "tier": "NO",
       "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK \u26a0\ufe0f GATE FAIL \u26a0\ufe0f YIELD VETO",
       "has_0dte": true
@@ -72,7 +200,7 @@
     {
       "ticker": "AMZN",
       "direction": "PUT",
-      "conviction": 2.8,
+      "conviction": 4.5,
       "tier": "NO",
       "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
@@ -80,9 +208,9 @@
     {
       "ticker": "MU",
       "direction": "PUT",
-      "conviction": 3.8,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f VIX HIGH REGIME BLOCK",
+      "conviction": 5.6,
+      "tier": "WATCH",
+      "go_nogo": "WATCH \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
     },
     {
@@ -112,7 +240,7 @@
     {
       "ticker": "QQQ",
       "direction": "PUT",
-      "conviction": 3.3,
+      "conviction": 5.0,
       "tier": "NO",
       "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
       "has_0dte": true
