@@ -398,8 +398,6 @@ def main():
     # ── Monday check ──────────────────────────────────────────
     if datetime.now().weekday() == 0:
         print('\n  Monday — ORB scanner skipped (weekend gap fade risk)')
-        if send:
-            send_email(build_html([]), 0)
         return
 
     # ── VIX regime check ──────────────────────────────────────
@@ -410,8 +408,6 @@ def main():
             regime_msg = 'too low — calm markets kill ORB edge' if vix_regime == 'low' \
                          else 'too high — fear-driven chop'
             print(f' — SKIP: {regime_msg}')
-            if send:
-                send_email(build_html([]), 0)
             return
         print(f' — in sweet spot (15–25), scanning...')
     else:
