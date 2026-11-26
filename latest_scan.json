@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-11-26T15:40:33",
+  "generated_at": "2026-11-26T16:31:07",
   "go_count": 0,
   "watch_count": 0,
   "market": {
-    "vix": 26.72,
-    "vix_chg": -1.57,
-    "futures_pct": 0.73,
-    "futures_price": 7248.5,
+    "vix": 26.63,
+    "vix_chg": -1.66,
+    "futures_pct": 0.8,
+    "futures_price": 7253.0,
     "spy_price": 720.43,
     "spy_premkt": 0.23,
     "spy_rsi": 44.2
@@ -21,16 +21,16 @@
       "pct": 0.1
     },
     "Oil (WTI)": {
-      "price": 84.98,
-      "pct": 1.55
+      "price": 85.04,
+      "pct": 1.63
     },
     "Gold": {
-      "price": 3599.2,
-      "pct": 1.79
+      "price": 3601.5,
+      "pct": 1.86
     },
     "Bitcoin": {
-      "price": 60359.95,
-      "pct": -0.03
+      "price": 60416.56,
+      "pct": 0.06
     }
   },
   "sectors": {
