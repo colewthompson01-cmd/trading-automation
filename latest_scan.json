@@ -1,217 +1,92 @@
 {
-  "generated_at": "2026-11-25T16:34:58",
+  "generated_at": "2026-11-26T15:40:33",
   "go_count": 0,
-  "watch_count": 1,
+  "watch_count": 0,
   "market": {
-    "vix": 33.87,
-    "vix_chg": 7.51,
-    "futures_pct": -2.61,
-    "futures_price": 7029.2,
-    "spy_price": 698.9,
-    "spy_premkt": -2.77,
-    "spy_rsi": 39.2
+    "vix": 26.72,
+    "vix_chg": -1.57,
+    "futures_pct": 0.73,
+    "futures_price": 7248.5,
+    "spy_price": 720.43,
+    "spy_premkt": 0.23,
+    "spy_rsi": 44.2
   },
   "cross": {
     "10Y Yield": {
-      "price": 4.81,
-      "pct": -1.98
+      "price": 4.85,
+      "pct": -1.14
     },
     "DXY": {
-      "price": 103.94,
-      "pct": 0.13
+      "price": 103.77,
+      "pct": 0.1
     },
     "Oil (WTI)": {
-      "price": 83.43,
-      "pct": 1.68
+      "price": 84.98,
+      "pct": 1.55
     },
     "Gold": {
-      "price": 3486.4,
-      "pct": -2.12
+      "price": 3599.2,
+      "pct": 1.79
     },
     "Bitcoin": {
-      "price": 58573.75,
-      "pct": -1.96
+      "price": 60359.95,
+      "pct": -0.03
     }
   },
   "sectors": {
-    "Tech": -5.14,
-    "Financials": -0.94,
-    "Energy": -0.43,
-    "Healthcare": -1.37,
-    "Comms": -1.72,
-    "Industrials": -1.68
+    "Tech": -0.83,
+    "Financials": 0.71,
+    "Energy": 0.74,
+    "Healthcare": -0.56,
+    "Comms": 0.89,
+    "Industrials": 0.83
   },
   "catalysts": [
+    "Fed rate decision / FOMC",
     "Jobs / unemployment data"
   ],
   "go_signals": [],
-  "watch_signals": [
-    {
-      "ticker": "MU",
-      "direction": "PUT",
-      "conviction": 5.6,
-      "tier": "WATCH",
-      "go_nogo": "WATCH \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "price": 553.47,
-      "premkt": -8.71,
-      "intraday": -3.73,
-      "exp_date": "2026-11-25",
-      "signals": [
-        {
-          "label": "S&P Futures",
-          "value": "-2.61%",
-          "vote": -1
-        },
-        {
-          "label": "Intraday Move",
-          "value": "-3.73%",
-          "vote": -1
-        },
-        {
-          "label": "VIX Direction",
-          "value": "+7.51",
-          "vote": -1
-        },
-        {
-          "label": "10Y Yield",
-          "value": "-1.98%",
-          "vote": 1
-        },
-        {
-          "label": "DXY",
-          "value": "+0.13%",
-          "vote": 0
-        },
-        {
-          "label": "News Sentiment",
-          "value": "NEUTRAL",
-          "vote": 0
-        },
-        {
-          "label": "Sector Pulse",
-          "value": "0 up / 6 dn",
-          "vote": -1
-        },
-        {
-          "label": "RSI (14)",
-          "value": "42.1",
-          "vote": 1
-        },
-        {
-          "label": "BB %B",
-          "value": "0.02",
-          "vote": 1
-        },
-        {
-          "label": "VIX IVR",
-          "value": "91th pctile",
-          "vote": -1
-        },
-        {
-          "label": "Put/Call Ratio",
-          "value": "1.37",
-          "vote": -1
-        },
-        {
-          "label": "Gap ATR",
-          "value": "-0.73x ATR",
-          "vote": -1
-        },
-        {
-          "label": "Trend Regime",
-          "value": "Bearish",
-          "vote": -1
-        }
-      ],
-      "chain": [
-        {
-          "strike": 552.5,
-          "lastPrice": 6.69,
-          "bid": 6.55,
-          "ask": 6.65,
-          "volume": 2776,
-          "openInterest": 592,
-          "iv": 60.9
-        },
-        {
-          "strike": 550.0,
-          "lastPrice": 5.35,
-          "bid": 5.35,
-          "ask": 5.5,
-          "volume": 14444,
-          "openInterest": 1340,
-          "iv": 60.6
-        },
-        {
-          "strike": 547.5,
-          "lastPrice": 4.7,
-          "bid": 4.85,
-          "ask": 5.0,
-          "volume": 2301,
-          "openInterest": 82,
-          "iv": 65.3
-        },
-        {
-          "strike": 545.0,
-          "lastPrice": 4.0,
-          "bid": 3.85,
-          "ask": 4.0,
-          "volume": 3390,
-          "openInterest": 265,
-          "iv": 64.3
-        }
-      ],
-      "recommended": {
-        "strike": 552.5,
-        "direction": "PUT",
-        "limit": 6.6,
-        "cost_per_contract": 660.0,
-        "stop": 3.3,
-        "target_50": 9.9,
-        "target_100": 13.2
-      }
-    }
-  ],
+  "watch_signals": [],
   "all_results": [
     {
       "ticker": "NVDA",
-      "direction": "PUT",
-      "conviction": 5.0,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "TSLA",
-      "direction": "PUT",
-      "conviction": 4.4,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "META",
-      "direction": "PUT",
-      "conviction": 3.8,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK \u26a0\ufe0f GATE FAIL \u26a0\ufe0f YIELD VETO",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "AMZN",
-      "direction": "PUT",
-      "conviction": 4.5,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "MU",
-      "direction": "PUT",
-      "conviction": 5.6,
-      "tier": "WATCH",
-      "go_nogo": "WATCH \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "NFLX",
@@ -239,11 +114,11 @@
     },
     {
       "ticker": "QQQ",
-      "direction": "PUT",
-      "conviction": 5.0,
-      "tier": "NO",
-      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f VIX HIGH REGIME BLOCK",
-      "has_0dte": true
+      "direction": "\u2014",
+      "conviction": 0,
+      "tier": "\u2014",
+      "go_nogo": "\u2014",
+      "has_0dte": false
     },
     {
       "ticker": "PLTR",
