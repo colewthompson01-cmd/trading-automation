@@ -1,172 +1,168 @@
 {
-  "generated_at": "2026-11-26T16:31:07",
+  "generated_at": "2026-11-27T15:42:07",
   "go_count": 0,
   "watch_count": 0,
   "market": {
-    "vix": 26.63,
-    "vix_chg": -1.66,
-    "futures_pct": 0.8,
-    "futures_price": 7253.0,
-    "spy_price": 720.43,
-    "spy_premkt": 0.23,
-    "spy_rsi": 44.2
+    "vix": 26.43,
+    "vix_chg": -0.37,
+    "futures_pct": 0.85,
+    "futures_price": 7256.8,
+    "spy_price": 725.01,
+    "spy_premkt": 1.16,
+    "spy_rsi": 46.5
   },
   "cross": {
-    "10Y Yield": {
-      "price": 4.85,
-      "pct": -1.14
-    },
     "DXY": {
-      "price": 103.77,
-      "pct": 0.1
+      "price": 103.98,
+      "pct": 0.3
     },
     "Oil (WTI)": {
-      "price": 85.04,
-      "pct": 1.63
+      "price": 83.93,
+      "pct": 0.3
     },
     "Gold": {
-      "price": 3601.5,
-      "pct": 1.86
+      "price": 3655.6,
+      "pct": 3.39
     },
     "Bitcoin": {
-      "price": 60416.56,
-      "pct": 0.06
+      "price": 59962.52,
+      "pct": -0.88
     }
   },
   "sectors": {
-    "Tech": -0.83,
-    "Financials": 0.71,
-    "Energy": 0.74,
-    "Healthcare": -0.56,
-    "Comms": 0.89,
-    "Industrials": 0.83
+    "Tech": 1.6,
+    "Financials": 1.19,
+    "Energy": 1.86,
+    "Healthcare": -0.05,
+    "Comms": 1.86,
+    "Industrials": 1.18
   },
   "catalysts": [
-    "Fed rate decision / FOMC",
-    "Jobs / unemployment data"
+    "Jobs / unemployment data",
+    "GDP release"
   ],
   "go_signals": [],
   "watch_signals": [],
   "all_results": [
     {
       "ticker": "NVDA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 2.7,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "TSLA",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 4.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     },
     {
       "ticker": "META",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 4.8,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     },
     {
       "ticker": "AMZN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 6.7,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     },
     {
       "ticker": "MU",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.6,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "NFLX",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 4.6,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     },
     {
       "ticker": "MSTR",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "HOOD",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "QQQ",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "PLTR",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 4.3,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     },
     {
       "ticker": "CRWD",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "ARM",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 1.8,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "COIN",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "SMCI",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "NO TRADE",
+      "conviction": 3.5,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS",
+      "has_0dte": true
     },
     {
       "ticker": "UVXY",
-      "direction": "\u2014",
-      "conviction": 0,
-      "tier": "\u2014",
-      "go_nogo": "\u2014",
-      "has_0dte": false
+      "direction": "CALL",
+      "conviction": 5.0,
+      "tier": "NO",
+      "go_nogo": "NO TRADE \u26a0\ufe0f MIXED SIGNALS \u26a0\ufe0f GATE FAIL \u26a0\ufe0f VIX BACKWARDATION",
+      "has_0dte": true
     }
   ]
 }
